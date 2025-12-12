@@ -1,13 +1,18 @@
-let imgs_links = [
-  "https://www.monacograndprixticket.com/media/cache/resolve/med500_450/uploads/yj/yjEkPoxJu0.png",
-  "https://cdn-2.motorsport.com/images/amp/YvKQG516/s1000/lewis-hamilton-ferrari.jpg",
-  "https://www.autohebdo.fr/app/uploads/2021/05/DPPI_00124015_333.jpg",
-  "https://www.autohebdo.fr/app/uploads/2025/04/DPPI_00125007_1235-753x494.jpg"
-];
+// Listen for messages from the popup
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === "EXTRACT_EMAIL") {
+    
+    // 1. Try to find the Subject Line
+    // Outlook often uses an input with aria-label "Add a subject"
+    const subjectInput = document.querySelector('input[aria-label="Add a subject"]');
+    const subject = subjectInput ? subjectInput.value : "[No Subject Found]";
 
-const imgs = document.getElementsByTagName("img");
+    // 2. Try to find the Body
+    // Outlook uses a contenteditable div with aria-label "Message body"
+    const bodyDiv = document.querySelector('div[aria-label="Message body"], div[aria-label="Message Body"]');
+    const body = bodyDiv ? bodyDiv.innerText : "[No Body Found]";
 
-for (image of imgs) {
-    const index = Math.floor(Math.random() * imgs_links.length);
-    image.src = imgs_links[index];
-}
+    // Send data back to popup
+    sendResponse({ subject: subject, body: body });
+  }
+});
