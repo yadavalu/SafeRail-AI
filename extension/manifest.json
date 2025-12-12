@@ -1,0 +1,13 @@
+{
+    "manifest_version": 3,
+    "name": "SafeRail AI",
+    "version": "1.0",
+    "description": "Safeguards your online experience with AI-driven moderation of email content.",
+    "content_scripts": [
+        {
+            "matches": ["https://www.youtube.com/*"],
+            "_replace": "https://**/*",
+            "js": ["content.js"]
+        }
+    ]
+}
