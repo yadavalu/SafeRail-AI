@@ -1,0 +1,183 @@
+.ampel-housing {
+  position: fixed;
+  /* Position at bottom right of window */
+  bottom: 20px;
+  right: 20px;
+  /* Ensure it's on top of almost everything on the web page */
+  z-index: 2147483647; 
+  
+  /* Styling the housing box */
+  background-color: #333; /* Dark grey housing */
+  padding: 12px;
+  border-radius: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+  border: 3px solid #222;
+
+  /* Animation */
+  animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+  animation-fill-mode: both;
+  will-change: transform, opacity;
+  transform-origin: bottom right;
+}
+
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: scale(0.5) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Common styles for all lights */
+.light {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #555; /* Default "off" state color */
+  cursor: pointer;
+  transition: background-color 0.3s, box-shadow 0.3s;
+  border: 2px solid rgba(0,0,0,0.2);
+}
+
+/* Colors when active */
+.red.active {
+  background-color: #ff3b30;
+  box-shadow: 0 0 15px #ff3b30;
+}
+
+.orange.active {
+  background-color: #ff9500;
+  box-shadow: 0 0 15px #ff9500;
+}
+
+.green.active {
+  background-color: #34c759;
+  box-shadow: 0 0 15px #34c759;
+}
+
+/* Hover effects (optional) */
+.light:hover {
+  opacity: 0.8;
+}
+
+.indicator-housing {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 2147483647;
+  
+  background-color: #222;
+  padding: 8px;
+  border-radius: 50%; /* Circle housing */
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+  border: 2px solid #333;
+  
+  animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.indicator-light {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: #555; /* Default Grey */
+  transition: background-color 0.5s ease, box-shadow 0.5s ease;
+  border: 2px solid rgba(255,255,255,0.1);
+}
+
+/* Status Colors */
+.indicator-light.grey { background-color: #555; }
+.indicator-light.green { 
+  background-color: #34c759; 
+  box-shadow: 0 0 10px #34c759;
+}
+.indicator-light.orange { 
+  background-color: #ff9500; 
+  box-shadow: 0 0 10px #ff9500;
+}
+.indicator-light.red { 
+  background-color: #ff3b30; 
+  box-shadow: 0 0 10px #ff3b30;
+}
+
+/* Loading Pulse Animation */
+.pulsing {
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(0.95); opacity: 0.7; }
+  50% { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.7; }
+}
+
+
+.housing-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 2147483647;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end; /* Align bubble to the right */
+  gap: 10px;
+}
+
+.indicator-light {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #555;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.3s;
+  border: 2px solid rgba(255,255,255,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.indicator-light:hover {
+  transform: scale(1.1);
+}
+
+/* Status Colors */
+.indicator-light.grey { background-color: #444; }
+.indicator-light.green { background-color: #34c759; box-shadow: 0 0 10px #34c759; }
+.indicator-light.orange { background-color: #ff9500; box-shadow: 0 0 10px #ff9500; }
+.indicator-light.red { background-color: #ff3b30; box-shadow: 0 0 10px #ff3b30; }
+
+.pulsing { animation: pulse 1.5s infinite; }
+
+/* The Explanation Bubble */
+.explanation-bubble {
+  background-color: #222;
+  color: #fff;
+  padding: 12px;
+  border-radius: 8px;
+  width: 250px;
+  font-family: sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+  border: 1px solid #444;
+  animation: slideUp 0.2s ease-out;
+  margin-bottom: 5px; /* Space between bubble and light */
+}
+
+@keyframes pulse {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.icon { color: white; opacity: 0.5; font-weight: bold; }
