@@ -13,10 +13,41 @@ export const getStyle = () => {
   return style
 }
 
+// ---------------------------------------------------------
+// Helper to detect if an element is a text field
+// ---------------------------------------------------------
+const isTextField = (element: HTMLElement | null): boolean => {
+  if (!element) return false
+
+  // 1. NEW: Check for specific Aria Label (e.g. Gmail Compose)
+  if (element.getAttribute("aria-label") === "Message body") return true
+
+  // 2. Check for specific class names (current element OR parent)
+  const hasEditableClass = (el: HTMLElement) => 
+    el.classList.contains("editable") || el.classList.contains("textarea")
+
+  if (hasEditableClass(element)) return true
+  if (element.parentElement && hasEditableClass(element.parentElement)) return true
+
+  // 3. Check Standard HTML Tags
+  const tagName = element.tagName
+  if (tagName === "TEXTAREA") return true
+  if (tagName === "INPUT") {
+    const type = element.getAttribute("type")?.toLowerCase() || "text"
+    const ignoredTypes = ["checkbox", "radio", "button", "submit", "hidden", "range", "color", "file"]
+    return !ignoredTypes.includes(type)
+  }
+
+  // 4. Check for "Content Editable" attribute
+  return element.isContentEditable
+}
+
+// Helper to extract text
 const getTextFromElement = (element: HTMLElement): string => {
   if (element.tagName === "INPUT" || element.tagName === "TEXTAREA") {
     return (element as HTMLInputElement).value || ""
   }
+  // Fallback for divs/spans
   return element.innerText || ""
 }
 
@@ -31,7 +62,6 @@ const TrafficLightOverlay = () => {
   const isHovering = useRef(false)
   const typingTimer = useRef<NodeJS.Timeout | null>(null)
 
-  // 1. Single Function to get Color AND Explanation
   const checkProfessionalism = async (text: string) => {
     if (!text.trim()) {
       setStatus("grey")
@@ -40,7 +70,6 @@ const TrafficLightOverlay = () => {
     }
 
     setLoading(true)
-    // Hide popup while re-analyzing to avoid showing old explanation for new text
     setShowPopup(false) 
 
     const response = await sendToBackground({
@@ -53,40 +82,37 @@ const TrafficLightOverlay = () => {
     setExplanation(response.explanation)
   }
 
-  // 2. Click Handler is now instant (no async)
   const handleIconClick = () => {
-    // Only toggle if we actually have an explanation to show
     if (explanation && status !== "grey") {
       setShowPopup(!showPopup)
     }
   }
 
-  // 3. Typing Listener
   useEffect(() => {
     const handleInput = (e: Event) => {
       if (typingTimer.current) clearTimeout(typingTimer.current)
       typingTimer.current = setTimeout(() => {
         const target = e.target as HTMLElement
-        const text = getTextFromElement(target)
-        checkProfessionalism(text)
+        // Only run if the input event came from a valid text field
+        if (isTextField(target)) { 
+             const text = getTextFromElement(target)
+             checkProfessionalism(text)
+        }
       }, 1000) 
     }
     document.addEventListener("input", handleInput)
     return () => document.removeEventListener("input", handleInput)
   }, [])
 
-  // 4. Focus Listener
   useEffect(() => {
     const handleFocusChange = () => {
       setTimeout(() => {
         if (isHovering.current) return
         
         const activeEl = document.activeElement as HTMLElement
-        const isInput = activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA" || activeEl.isContentEditable
         
-        if (isInput) {
+        if (isTextField(activeEl)) {
             setIsVisible(true)
-            // Check existing text immediately on focus
             checkProfessionalism(getTextFromElement(activeEl))
         } else {
             setIsVisible(false)
@@ -112,14 +138,12 @@ const TrafficLightOverlay = () => {
       onMouseLeave={() => { isHovering.current = false }}
       onPointerDown={(e) => { e.preventDefault(); e.stopPropagation() }}
     >
-      {/* Explanation Bubble */}
       {showPopup && explanation && (
         <div className="explanation-bubble">
            {explanation}
         </div>
       )}
 
-      {/* Indicator Light */}
       <div 
         className={`indicator-light ${status} ${loading ? "pulsing" : ""}`}
         onClick={handleIconClick}
