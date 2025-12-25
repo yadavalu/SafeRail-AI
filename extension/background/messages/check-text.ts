@@ -1,67 +1,102 @@
 import type { PlasmoMessaging } from "@plasmohq/messaging"
+import complianceRules from "data-text:../../assets/compliance_rules.txt"
 
-// Configuration for your local server
-// If using LM Studio, change to: "http://localhost:1234/v1/chat/completions"
 const OLLAMA_ENDPOINT = "http://localhost:11434/api/generate"
-const MODEL_NAME = "llama3.2:3b" // or "llama3.1", "mistral", etc.
+const PRESIDIO_ENDPOINT = "http://localhost:3000/analyze"
+const MODEL_NAME = "llama3.2:3b"
+
+// --- HELPER: Call Presidio ---
+const checkConfidentiality = async (text: string) => {
+  try {
+    const response = await fetch(PRESIDIO_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text })
+    })
+
+    if (!response.ok) return [] // Fail safe (assume no PII if server down, or handle error)
+    
+    return await response.json() // Returns array of found entities
+  } catch (error) {
+    console.error("Presidio Connection Error:", error)
+    return []
+  }
+}
 
 const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
-  const text = req.body.text
+  const { text, platform } = req.body
 
   if (!text || text.length < 2) {
-    res.send({ status: "grey", explanation: "" })
+    res.send({ status: "grey", explanation: "", confidential: false })
     return
   }
 
+  // -------------------------------------------------------
+  // 1. PRESIDIO CHECK (Fast & Deterministic)
+  // -------------------------------------------------------
+  const piiResults = await checkConfidentiality(text)
+
+  console.log("Presidio Results:", piiResults)
+
+  if (piiResults.length > 0) {
+    // Map the found entities to a readable string (e.g. "PHONE_NUMBER, CREDIT_CARD")
+    const foundTypes = [...new Set(piiResults.map((r: any) => r.type))].join(", ")
+    
+    res.send({
+      status: "red",
+      confidential: true,
+      explanation: `Sensitive data detected: ${foundTypes}. \n\nThis violates confidentiality protocols.`
+    })
+    return // STOP HERE. Do not call LLM.
+  }
+
+  // -------------------------------------------------------
+  // 2. LLM CHECK (Tone & Compliance)
+  // -------------------------------------------------------
   try {
-    // We use standard fetch. No SDK needed for local API.
     const response = await fetch(OLLAMA_ENDPOINT, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         model: MODEL_NAME,
-        // "format: json" is an Ollama specific feature that enforces JSON syntax
-        format: "json", 
-        stream: false, // Important! We don't want a stream of data, just the final result
+        format: "json",
+        stream: false,
+        options: { temperature: 0 }, 
+        
+        // Note: We removed the "confidentiality" instruction from the prompt
+        // because Presidio handles it better.
         prompt: `
-          Analyze the professionalism of this text: "${text}"
+          You are a strict Compliance Officer. 
           
-          Respond with a JSON object containing exactly two keys:
-          1. "status": "green" (professional), "orange" (casual), or "red" (rude).
-          2. "explanation": A very short sentence explaining why.
+          Check for COMPLIANCE violations against these rules:
+          ${complianceRules}
+
+          Context: User is typing on ${platform}.
+          Input: "${text}"
+          
+          Respond with JSON:
+          {
+            "status": "green" | "orange" | "red",
+            "explanation": "Short reason for the rating."
+          }
         `
       })
     })
 
-    if (!response.ok) {
-      throw new Error(`Local server error: ${response.statusText}`)
-    }
+    if (!response.ok) throw new Error(`Local server error: ${response.statusText}`)
 
     const data = await response.json()
-    
-    // Ollama returns the result in a field called 'response'
-    // Since we requested format: "json", we parse that string object
     const result = JSON.parse(data.response)
-
-    console.log("Local Llama Result:", result)
 
     res.send({
       status: result.status || "grey",
-      explanation: result.explanation || "No explanation provided."
+      explanation: result.explanation || "Error parsing response.",
+      confidential: false // Presidio already cleared this
     })
 
   } catch (error) {
-    console.error("Local Llama Error:", error)
-    
-    // Helpful error for debugging connection issues
-    let errorMsg = "Could not connect to Localhost."
-    if (error.message.includes("Failed to fetch")) {
-      errorMsg = "Is Ollama running? (try 'ollama serve' in terminal)"
-    }
-
-    res.send({ status: "grey", explanation: errorMsg })
+    console.error("LLM Analysis Error:", error)
+    res.send({ status: "grey", explanation: "Compliance check failed.", confidential: false })
   }
 }
 
