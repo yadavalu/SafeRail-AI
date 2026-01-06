@@ -1,183 +1,81 @@
-.ampel-housing {
+/* contents/input_overlay.css */
+
+.compliance-widget {
   position: fixed;
-  /* Position at bottom right of window */
   bottom: 20px;
   right: 20px;
-  /* Ensure it's on top of almost everything on the web page */
-  z-index: 2147483647; 
+  z-index: 2147483647; /* Top layer */
   
-  /* Styling the housing box */
-  background-color: #333; /* Dark grey housing */
-  padding: 12px;
-  border-radius: 30px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-  border: 3px solid #222;
-
-  /* Animation */
-  animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
-  animation-fill-mode: both;
+  width: 300px;
+  background-color: #222; /* Dark theme */
+  color: #fff;
+  padding: 16px;
+  border-radius: 12px;
+  
+  /* Default Border (Grey/Loading) */
+  border: 3px solid #555; 
+  box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+  
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  transition: border-color 0.3s ease, transform 0.2s ease;
+  
+  /* Animation for appearing */
+  animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   will-change: transform, opacity;
-  transform-origin: bottom right;
 }
 
-@keyframes popIn {
-  from {
-    opacity: 0;
-    transform: scale(0.5) translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(20px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* Common styles for all lights */
-.light {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background-color: #555; /* Default "off" state color */
-  cursor: pointer;
-  transition: background-color 0.3s, box-shadow 0.3s;
-  border: 2px solid rgba(0,0,0,0.2);
+/* --- DYNAMIC BORDER COLORS --- */
+.compliance-widget.green {
+  border-color: #34c759; /* IOS Green */
 }
 
-/* Colors when active */
-.red.active {
-  background-color: #ff3b30;
-  box-shadow: 0 0 15px #ff3b30;
+.compliance-widget.warn {
+  border-color: #ff9500; /* IOS Orange */
 }
 
-.orange.active {
-  background-color: #ff9500;
-  box-shadow: 0 0 15px #ff9500;
+.compliance-widget.clear_warn {
+  border-color: #ff3b30; /* IOS Red */
 }
 
-.green.active {
-  background-color: #34c759;
-  box-shadow: 0 0 15px #34c759;
+.compliance-widget.grey {
+  border-color: #555;
 }
 
-/* Hover effects (optional) */
-.light:hover {
-  opacity: 0.8;
-}
-
-.indicator-housing {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  z-index: 2147483647;
-  
-  background-color: #222;
-  padding: 8px;
-  border-radius: 50%; /* Circle housing */
-  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-  border: 2px solid #333;
-  
-  animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-.indicator-light {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background-color: #555; /* Default Grey */
-  transition: background-color 0.5s ease, box-shadow 0.5s ease;
-  border: 2px solid rgba(255,255,255,0.1);
-}
-
-/* Status Colors */
-.indicator-light.grey { background-color: #555; }
-.indicator-light.green { 
-  background-color: #34c759; 
-  box-shadow: 0 0 10px #34c759;
-}
-.indicator-light.orange { 
-  background-color: #ff9500; 
-  box-shadow: 0 0 10px #ff9500;
-}
-.indicator-light.red { 
-  background-color: #ff3b30; 
-  box-shadow: 0 0 10px #ff3b30;
-}
-
-/* Loading Pulse Animation */
-.pulsing {
-  animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-  0% { transform: scale(0.95); opacity: 0.7; }
-  50% { transform: scale(1.05); opacity: 1; }
-  100% { transform: scale(0.95); opacity: 0.7; }
-}
-
-
-.housing-container {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  z-index: 2147483647;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end; /* Align bubble to the right */
-  gap: 10px;
-}
-
-.indicator-light {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background-color: #555;
-  cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.3s;
-  border: 2px solid rgba(255,255,255,0.2);
+/* --- CONTENT LAYOUT --- */
+.widget-header {
   display: flex;
   align-items: center;
-  justify-content: center;
-}
-
-.indicator-light:hover {
-  transform: scale(1.1);
-}
-
-/* Status Colors */
-.indicator-light.grey { background-color: #444; }
-.indicator-light.green { background-color: #34c759; box-shadow: 0 0 10px #34c759; }
-.indicator-light.orange { background-color: #ff9500; box-shadow: 0 0 10px #ff9500; }
-.indicator-light.red { background-color: #ff3b30; box-shadow: 0 0 10px #ff3b30; }
-
-.pulsing { animation: pulse 1.5s infinite; }
-
-/* The Explanation Bubble */
-.explanation-bubble {
-  background-color: #222;
-  color: #fff;
-  padding: 12px;
-  border-radius: 8px;
-  width: 250px;
-  font-family: sans-serif;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-weight: 700;
   font-size: 14px;
-  line-height: 1.4;
-  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-  border: 1px solid #444;
-  animation: slideUp 0.2s ease-out;
-  margin-bottom: 5px; /* Space between bubble and light */
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
-@keyframes pulse {
-  0% { transform: scale(0.95); opacity: 0.8; }
-  50% { transform: scale(1.05); opacity: 1; }
-  100% { transform: scale(0.95); opacity: 0.8; }
+.status-icon {
+  font-size: 18px;
 }
 
-@keyframes slideUp {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+.widget-content {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #e0e0e0;
+  white-space: pre-wrap; /* Preserves newlines from LLM */
 }
 
-.icon { color: white; opacity: 0.5; font-weight: bold; }
+/* --- PULSING ANIMATION FOR LOADING --- */
+.pulsing {
+  animation: borderPulse 2s infinite;
+}
+
+@keyframes borderPulse {
+  0% { border-color: #555; }
+  50% { border-color: #888; }
+  100% { border-color: #555; }
+}

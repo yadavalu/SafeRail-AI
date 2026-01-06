@@ -43,7 +43,7 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
     const foundTypes = [...new Set(piiResults.map((r: any) => r.type))].join(", ")
     
     res.send({
-      status: "red",
+      status: "clear_warn",
       confidential: true,
       explanation: `Sensitive data detected: ${foundTypes}. \n\nThis violates confidentiality protocols.`
     })
@@ -66,17 +66,25 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
         // Note: We removed the "confidentiality" instruction from the prompt
         // because Presidio handles it better.
         prompt: `
-          You are a strict Compliance Officer. 
-          
-          Check for COMPLIANCE violations against these rules:
+          Evaluate INPUT_TEXT against RULESET thoroughly.
+
+          Output EXACTLY:
+          <GREEN|WARN|CLEAR_WARN>|<RULE_ID|->|<START..END|->
+
+          - CLEAR_WARN only for direct rule violations with a supporting span.
+          - WARN only if a span indicates a possible rule violation.
+          - Otherwise GREEN.
+          - Do NOT default to WARN.
+
+          RULESET:
           ${complianceRules}
 
-          Context: User is typing on ${platform}.
-          Input: "${text}"
+          INPUT_TEXT:
+          ${text}
           
           Respond with JSON:
           {
-            "status": "green" | "orange" | "red",
+            "status": "green" | "warn" | "clear_warn",
             "explanation": "Short reason for the rating."
           }
         `

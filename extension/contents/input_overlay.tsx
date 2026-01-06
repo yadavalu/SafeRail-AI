@@ -18,7 +18,6 @@ export const getStyle = () => {
 const UNSAFE_DOMAINS = unsafeDomainsText.split("\n").map(s => s.trim().toLowerCase()).filter(Boolean)
 
 // --- HELPERS ---
-
 const isCurrentSiteUnsafe = (): string | null => {
   const currentHost = window.location.hostname.toLowerCase()
   return UNSAFE_DOMAINS.find(d => currentHost.includes(d)) || null
@@ -54,51 +53,50 @@ const getTextFromElement = (element: HTMLElement): string => {
   return element.innerText || ""
 }
 
-// --- COMPONENT ---
+// --- MAIN COMPONENT ---
 
-const TrafficLightOverlay = () => {
-  const [status, setStatus] = useState<"grey" | "green" | "orange" | "red">("grey")
-  const [explanation, setExplanation] = useState<string | null>(null)
+const ComplianceWidget = () => {
+  const [status, setStatus] = useState<"grey" | "green" | "warn" | "clear_warn">("grey")
+  const [explanation, setExplanation] = useState<string | null>("Ready to check.")
   
-  // State for Confidentiality Flag (Triggers the '!' icon)
-  const [isConfidential, setIsConfidential] = useState(false)
-
   const [isVisible, setIsVisible] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [showPopup, setShowPopup] = useState(false)
+  const [isConfidential, setIsConfidential] = useState(false)
   
-  const isHovering = useRef(false)
   const typingTimer = useRef<NodeJS.Timeout | null>(null)
   const lastAnalyzedText = useRef<string>("")
+  const isHovering = useRef(false) 
 
   const checkCompliance = async (text: string) => {
+    // 1. If empty, show "Ready" state but KEEP VISIBLE
     if (!text.trim()) {
       setStatus("grey")
-      setExplanation(null)
-      setIsConfidential(false)
+      setExplanation("Waiting for input...")
       lastAnalyzedText.current = ""
       return
     }
 
-    // A. SECURITY CHECK (Unsafe Domain)
-    // We keep this in frontend to warn user BEFORE sending data anywhere
+    // 2. Security Check (Frontend)
     const unsafeMatch = isCurrentSiteUnsafe()
     let securityMsg = ""
     
     if (unsafeMatch) {
-        securityMsg = `⚠️ SECURITY ALERT: Usage of ${unsafeMatch} is prohibited.`
-        setStatus("red")
-    }
+        securityMsg = `SECURITY ALERT: ${unsafeMatch} is prohibited.`
+        setStatus("clear_warn")
+        setExplanation(securityMsg)
+        // We continue to allow LLM check in background if you want, 
+        // or return here to block it.
+    } 
 
-    // B. OPTIMIZATION: Skip API if text hasn't changed
+    // 3. Skip LLM if text is duplicate (Optimization)
     if (text.trim() === lastAnalyzedText.current.trim()) return
 
     setLoading(true)
-    if (!unsafeMatch) setShowPopup(false) 
+    setExplanation("Analyzing compliance...") // Immediate feedback
 
     const platform = getPlatformContext()
 
-    // C. BACKGROUND CHECK (Presidio + LLM)
+    // 4. Call Background
     const response = await sendToBackground({
       name: "check-text",
       body: { text, platform }
@@ -106,23 +104,20 @@ const TrafficLightOverlay = () => {
 
     setLoading(false)
 
-    // D. MERGE RESULTS
+    // 5. Process Results
     let finalStatus = response.status
     let finalExplanation = response.explanation
-    
-    // IMPORTANT: Read the flag from the background (Presidio result)
     const confidentialDetected = response.confidential || false
     setIsConfidential(confidentialDetected)
 
-    // If Unsafe Domain, pre-pend that warning
+    // Overrides
     if (unsafeMatch) {
-        finalStatus = "red"
-        finalExplanation = `${securityMsg}\n\n${finalExplanation}`
+        finalStatus = "clear_warn"
+        finalExplanation = `${securityMsg}\n\n${response.explanation}`
     }
     
-    // If Confidential, force status to Red (if not already)
     if (confidentialDetected) {
-        finalStatus = "red"
+        finalStatus = "clear_warn"
     }
 
     setStatus(finalStatus)
@@ -130,18 +125,15 @@ const TrafficLightOverlay = () => {
     lastAnalyzedText.current = text
   }
 
-  const handleIconClick = () => {
-    if (explanation && status !== "grey") {
-      setShowPopup(!showPopup)
-    }
-  }
-
   // --- LISTENERS ---
+  
+  // 1. INPUT LISTENER (Typing)
   useEffect(() => {
     const handleInput = (e: Event) => {
       const target = e.target as HTMLElement
       if (!isTextField(target)) return
       const text = getTextFromElement(target)
+      
       if (typingTimer.current) clearTimeout(typingTimer.current)
       
       const lastChar = text.trim().slice(-1)
@@ -154,20 +146,33 @@ const TrafficLightOverlay = () => {
     return () => document.removeEventListener("input", handleInput)
   }, [])
 
+  // 2. FOCUS LISTENER (Show/Hide) - THIS WAS MISSING
   useEffect(() => {
     const handleFocusChange = () => {
       setTimeout(() => {
+        // If we are hovering the widget itself, don't hide it
         if (isHovering.current) return
+        
         const activeEl = document.activeElement as HTMLElement
+        
         if (isTextField(activeEl)) {
+            // User clicked a text field -> Show Widget
             setIsVisible(true)
-            checkCompliance(getTextFromElement(activeEl))
+            const text = getTextFromElement(activeEl)
+            if (!text.trim()) {
+                setStatus("grey")
+                setExplanation("Ready to check.")
+            } else {
+                // If field already has text, check it
+                checkCompliance(text)
+            }
         } else {
+            // User clicked away -> Hide Widget
             setIsVisible(false)
-            setShowPopup(false)
         }
       }, 100)
     }
+
     document.addEventListener("focusin", handleFocusChange)
     document.addEventListener("focusout", handleFocusChange)
     return () => {
@@ -178,39 +183,41 @@ const TrafficLightOverlay = () => {
 
   if (!isVisible) return null
 
+  // --- RENDER HELPERS ---
+  const getHeaderTitle = () => {
+    if (loading) return "Checking..."
+    if (status === "clear_warn") return isConfidential ? "Data Leak Detected" : "Violation Detected"
+    if (status === "warn") return "Warning"
+    if (status === "green") return "Compliant"
+    return "Compliance"
+  }
+
+  const getIcon = () => {
+    if (loading) return "⏳"
+    if (status === "clear_warn") return "⛔"
+    if (status === "warn") return "⚠️"
+    if (status === "green") return "✅"
+    return "🛡️"
+  }
+
   return (
     <div 
-      className="housing-container"
+      className={`compliance-widget ${status} ${loading ? "pulsing" : ""}`}
       onMouseEnter={() => { isHovering.current = true }}
       onMouseLeave={() => { isHovering.current = false }}
+      // Prevent clicking the widget from causing a "blur" event on the input
       onPointerDown={(e) => { e.preventDefault(); e.stopPropagation() }}
     >
-      {showPopup && explanation && (
-        <div className="explanation-bubble" style={{ whiteSpace: "pre-wrap" }}>
-           {explanation}
-        </div>
-      )}
-
-      {/* LIGHT COMPONENT */}
-      <div 
-        className={`indicator-light ${status} ${loading ? "pulsing" : ""}`}
-        onClick={handleIconClick}
-        title={explanation ? "Click for explanation" : ""}
-      >
-        {/* Priority Logic: Loading > Confidential (!) > Status Color */}
-        
-        {/* 1. Show '!' if Presidio detected something (and not loading) */}
-        {!loading && isConfidential && (
-            <span className="icon" style={{ fontSize: "24px", fontWeight: "900" }}>!</span>
-        )}
-        
-        {/* 2. Show '?' if Grey/Idle */}
-        {!loading && !isConfidential && status === "grey" && (
-            <span className="icon">?</span>
-        )}
+      <div className="widget-header">
+        <span className="status-icon">{getIcon()}</span>
+        <span>{getHeaderTitle()}</span>
+      </div>
+      
+      <div className="widget-content">
+        {explanation}
       </div>
     </div>
   )
 }
 
-export default TrafficLightOverlay
+export default ComplianceWidget
