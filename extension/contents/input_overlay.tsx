@@ -113,7 +113,7 @@ const ComplianceWidget = () => {
     // Overrides
     if (unsafeMatch) {
         finalStatus = "clear_warn"
-        finalExplanation = `${securityMsg}\n\n${response.explanation}`
+        finalExplanation = `${securityMsg}\n${response.explanation}`
     }
     
     if (confidentialDetected) {

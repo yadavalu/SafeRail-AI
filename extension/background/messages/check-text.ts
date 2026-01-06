@@ -3,7 +3,7 @@ import complianceRules from "data-text:../../assets/compliance_rules.txt"
 
 const OLLAMA_ENDPOINT = "http://localhost:11434/api/generate"
 const PRESIDIO_ENDPOINT = "http://localhost:3000/analyze"
-const MODEL_NAME = "llama3.2:3b"
+const MODEL_NAME = "llama3.1:8b-instruct-q4_K_M"
 
 // --- HELPER: Call Presidio ---
 const checkConfidentiality = async (text: string) => {
@@ -73,8 +73,12 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
 
           - CLEAR_WARN only for direct rule violations with a supporting span.
           - WARN only if a span indicates a possible rule violation.
+          - WARN if tone is off but no direct violation.
+          - WARN if possible ambiguity.
           - Otherwise GREEN.
           - Do NOT default to WARN.
+
+          Never leave explanation empty.
 
           RULESET:
           ${complianceRules}
@@ -95,6 +99,8 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
 
     const data = await response.json()
     const result = JSON.parse(data.response)
+
+    console.log("LLM Analysis Result:", result)
 
     res.send({
       status: result.status || "grey",

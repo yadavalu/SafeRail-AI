@@ -4,3 +4,4 @@
 4. No mention of competitor names in a negative light.
 5. All dates must be in DD/MM/YYYY format.
 6. No disguised personal data leakages, explicit and inexplicit.
+7. No mention of personal financial accounts
