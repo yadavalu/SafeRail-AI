@@ -16,4 +16,4 @@ EXPOSE 3000
 
 # Run with Gunicorn (Production server) instead of app.run()
 # 4 workers allows handling multiple requests simultaneously
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:3000", "app:app"]
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:3000", "server:app"]
