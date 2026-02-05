@@ -59,10 +59,11 @@ def analyze():
         })
             
     return jsonify(response)
-
+"""
 if __name__ == "__main__":
-    ollama_thread = threading.Thread(target=start_ollama)
-    ollama_thread.start()
+    #ollama_thread = threading.Thread(target=start_ollama)
+    #ollama_thread.start()
 
     print(f"🛡️ Presidio Server running. Threshold: {MIN_SCORE}, Ignoring: {ENTITIES_TO_IGNORE}")
     app.run(port=3000)
+"""

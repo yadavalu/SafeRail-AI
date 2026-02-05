@@ -1,0 +1,18 @@
+name: Deploy Presidio App
+
+on:
+  push:
+    branches:
+      - main  # Runs automatically when you push code to main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Trigger Render Deployment
+        # This sends a signal to Render to pull your latest code and rebuild the Docker container
+        run: |
+          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
