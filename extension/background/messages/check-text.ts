@@ -89,7 +89,7 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
           Respond with JSON:
           {
             "status": "green" | "warn" | "clear_warn",
-            "explanation": "Short reason for the rating."
+            "explanation": "Very short reason for the rating."
           }
         `
       })
