@@ -1,6 +1,6 @@
 /extension/.env
 /.env
 /venv
-/extensions/firebase-config.ts
+/extension/firebase-config.ts
 /dist_release
 /node_modules
