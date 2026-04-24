@@ -1,23 +1,37 @@
-import { useState } from "react"
+import { useStorage } from "@plasmohq/storage/hook"
 
 function IndexPopup() {
-  const [data, setData] = useState("")
+  const [theme, setTheme] = useStorage("theme", "system")
 
   return (
     <div
       style={{
-        padding: 16
+        padding: 16,
+        minWidth: 200,
+        fontFamily: "sans-serif"
       }}>
-      <h2>
-        Welcome to your{" "}
-        <a href="https://www.plasmo.com" target="_blank">
-          Plasmo
-        </a>{" "}
-        Extension!
-      </h2>
-      <input onChange={(e) => setData(e.target.value)} value={data} />
-      <a href="https://docs.plasmo.com" target="_blank">
-        View Docs
+      <h2 style={{ marginBottom: 12 }}>SafeRail AI</h2>
+      
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ display: "block", marginBottom: 8, fontWeight: "bold" }}>Theme Mode</label>
+        <select 
+          value={theme} 
+          onChange={(e) => setTheme(e.target.value)}
+          style={{
+            width: "100%",
+            padding: "8px",
+            borderRadius: "4px",
+            border: "1px solid #ccc"
+          }}
+        >
+          <option value="system">System</option>
+          <option value="light">Light (White)</option>
+          <option value="dark">Dark</option>
+        </select>
+      </div>
+
+      <a href="tabs/dashboard.html" target="_blank" style={{ color: "#007bff", textDecoration: "none", fontSize: "14px" }}>
+        Open Admin Dashboard
       </a>
     </div>
   )

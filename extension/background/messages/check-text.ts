@@ -1,9 +1,42 @@
 import type { PlasmoMessaging } from "@plasmohq/messaging"
-import complianceRules from "data-text:../../assets/compliance_rules.txt"
+import { db } from "../../firebase-config"
+import { doc, getDoc, updateDoc, increment, setDoc } from "firebase/firestore/lite"
+import localComplianceRules from "data-text:../../assets/compliance_rules.txt"
 
 const OLLAMA_ENDPOINT = "http://localhost:11434/api/generate"
 const PRESIDIO_ENDPOINT = "http://localhost:3000/analyze"
 const MODEL_NAME = "llama3.1:8b-instruct-q4_K_M"
+
+// --- ANALYTICS ---
+const reportAnalytics = async (type: "scanned" | "warning" | "violation" | "confidential") => {
+    try {
+        const ref = doc(db, "config", "analytics");
+        // Note: updateDoc in Lite works similarly but is more robust for one-offs
+        await updateDoc(ref, {
+            [type]: increment(1)
+        }).catch(async (err) => {
+            if (err.code === "not-found" || err.message?.includes("no entity")) {
+                await setDoc(ref, { scanned: 0, warning: 0, violation: 0, confidential: 0 }, { merge: true });
+                await updateDoc(ref, { [type]: increment(1) });
+            }
+        });
+    } catch (e) {
+        console.error("Analytics Error:", e);
+    }
+}
+
+// --- CONFIG FETCHING ---
+const getRules = async () => {
+    try {
+        const d = await getDoc(doc(db, "config", "settings"));
+        if (d.exists() && d.data().compliance_rules) {
+            return d.data().compliance_rules;
+        }
+    } catch (e) {
+        console.error("Rules Fetch Error:", e);
+    }
+    return localComplianceRules;
+}
 
 // --- HELPER: Call Presidio ---
 const checkConfidentiality = async (text: string) => {
@@ -12,14 +45,20 @@ const checkConfidentiality = async (text: string) => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text })
-    })
+    }).catch(e => {
+        throw new Error("PRESIDIO_DOWN");
+    });
 
-    if (!response.ok) return [] // Fail safe (assume no PII if server down, or handle error)
+    if (!response.ok) {
+        throw new Error(`PRESIDIO_ERROR: ${response.status}`);
+    }
     
-    return await response.json() // Returns array of found entities
+    return await response.json(); 
   } catch (error) {
-    console.error("Presidio Connection Error:", error)
-    return []
+    if (error.message === "PRESIDIO_DOWN") {
+        throw new Error("Presidio (PII) server is down. Please start the backend.");
+    }
+    throw error;
   }
 }
 
@@ -31,28 +70,28 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
     return
   }
 
-  // -------------------------------------------------------
-  // 1. PRESIDIO CHECK (Fast & Deterministic)
-  // -------------------------------------------------------
-  const piiResults = await checkConfidentiality(text)
+  await reportAnalytics("scanned");
+  const rules = await getRules();
 
-  console.log("Presidio Results:", piiResults)
-
-  if (piiResults.length > 0) {
-    // Map the found entities to a readable string (e.g. "PHONE_NUMBER, CREDIT_CARD")
-    const foundTypes = [...new Set(piiResults.map((r: any) => r.type))].join(", ")
-    
-    res.send({
-      status: "clear_warn",
-      confidential: true,
-      explanation: `Sensitive data detected: ${foundTypes}. \n\nThis violates confidentiality protocols.`
-    })
-    return // STOP HERE. Do not call LLM.
+  // 1. PRESIDIO CHECK
+  try {
+    const piiResults = await checkConfidentiality(text)
+    if (piiResults.length > 0) {
+      const foundTypes = [...new Set(piiResults.map((r: any) => r.type))].join(", ")
+      await reportAnalytics("confidential");
+      res.send({
+        status: "clear_warn",
+        confidential: true,
+        explanation: `Sensitive data detected: ${foundTypes}. \n\nThis violates confidentiality protocols.`
+      })
+      return 
+    }
+  } catch (error) {
+    res.send({ status: "grey", explanation: `ERROR: ${error.message}`, confidential: false });
+    return;
   }
 
-  // -------------------------------------------------------
-  // 2. LLM CHECK (Tone & Compliance)
-  // -------------------------------------------------------
+  // 2. LLM CHECK
   try {
     const response = await fetch(OLLAMA_ENDPOINT, {
       method: "POST",
@@ -62,55 +101,42 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
         format: "json",
         stream: false,
         options: { temperature: 0 }, 
-        
-        // Note: We removed the "confidentiality" instruction from the prompt
-        // because Presidio handles it better.
         prompt: `
           Evaluate INPUT_TEXT against RULESET thoroughly.
-
-          Output EXACTLY:
-          <GREEN|WARN|CLEAR_WARN>|<RULE_ID|->|<START..END|->
-
-          - CLEAR_WARN only for direct rule violations with a supporting span.
-          - WARN only if a span indicates a possible rule violation.
-          - WARN if tone is off but no direct violation.
-          - WARN if possible ambiguity.
-          - Otherwise GREEN.
-          - Do NOT default to WARN.
-
-          Never leave explanation empty.
-
-          RULESET:
-          ${complianceRules}
-
-          INPUT_TEXT:
-          ${text}
-          
-          Respond with JSON:
-          {
-            "status": "green" | "warn" | "clear_warn",
-            "explanation": "Short reason for the rating."
-          }
+          RULESET: ${rules}
+          INPUT_TEXT: ${text}
+          Respond with JSON: {"status": "green" | "warn" | "clear_warn", "explanation": "Short reason."}
         `
       })
-    })
+    }).catch(e => {
+        throw new Error("LLM_SERVER_DOWN");
+    });
 
-    if (!response.ok) throw new Error(`Local server error: ${response.statusText}`)
-
+    if (!response.ok) {
+        if (response.status === 404) {
+            throw new Error(`LLM Model not found: ${MODEL_NAME}. Please run 'ollama pull ${MODEL_NAME}'`);
+        }
+        if (response.status === 403) {
+            throw new Error(`LLM server error: Forbidden (CORS). Please ensure Ollama is started with OLLAMA_ORIGINS="*" or 'chrome-extension://*'. Try restarting the backend server.py.`);
+        }
+        throw new Error(`LLM server error: ${response.statusText}`);
+    }
     const data = await response.json()
     const result = JSON.parse(data.response)
 
-    console.log("LLM Analysis Result:", result)
+    if (result.status === "clear_warn") await reportAnalytics("violation");
+    if (result.status === "warn") await reportAnalytics("warning");
 
     res.send({
       status: result.status || "grey",
       explanation: result.explanation || "Error parsing response.",
-      confidential: false // Presidio already cleared this
+      confidential: false
     })
 
   } catch (error) {
-    console.error("LLM Analysis Error:", error)
-    res.send({ status: "grey", explanation: "Compliance check failed.", confidential: false })
+    let msg = error.message;
+    if (msg === "LLM_SERVER_DOWN") msg = "LLM Server (Ollama) is down. Please ensure Ollama is running.";
+    res.send({ status: "grey", explanation: `ERROR: ${msg}`, confidential: false })
   }
 }
 
