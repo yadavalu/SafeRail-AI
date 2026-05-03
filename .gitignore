@@ -4,3 +4,4 @@
 /extension/firebase-config.ts
 /dist_release
 /node_modules
+/serviceAccountKey.json

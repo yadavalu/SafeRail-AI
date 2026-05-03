@@ -139,7 +139,6 @@ const ComplianceWidget = () => {
     if (text.trim() === lastAnalyzedText.current.trim() && !unsafeMatch) return
 
     setLoading(true)
-    setExplanation("Analyzing compliance...")
 
     const platform = getPlatformContext()
 

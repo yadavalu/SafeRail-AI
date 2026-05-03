@@ -3,6 +3,17 @@ import shutil
 import subprocess
 import zipfile
 from pathlib import Path
+import structlog
+
+# Configure structlog
+structlog.configure(
+    processors=[
+        structlog.processors.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.dev.ConsoleRenderer(),
+    ]
+)
+logger = structlog.get_logger()
 
 # Paths
 ROOT_DIR = Path(__file__).parent
@@ -13,57 +24,57 @@ EXTENSION_BUILD_DIR = EXTENSION_DIR / "build" / "chrome-mv3-prod"
 def clean():
     """Removes previous build artifacts."""
     if BUILD_DIR.exists():
+        logger.info("Cleaning previous build artifacts", path=str(BUILD_DIR))
         shutil.rmtree(BUILD_DIR)
     BUILD_DIR.mkdir(exist_ok=True)
 
 def build_extension():
     """Builds the Plasmo extension."""
-    print("📦 Building Browser Extension...")
+    logger.info("Building Browser Extension")
     try:
         # Determine if pnpm or npm should be used
         base_cmd = "pnpm" if shutil.which("pnpm") else "npm"
         # On Windows, we need shell=True for .cmd files like npm/pnpm
         is_windows = os.name == "nt"
         
-        print(f"  > Running {base_cmd} install...")
+        logger.info("Installing extension dependencies", command=f"{base_cmd} install")
         subprocess.check_call([base_cmd, "install"], cwd=EXTENSION_DIR, shell=is_windows)
         
-        print(f"  > Running {base_cmd} run build...")
+        logger.info("Running extension build", command=f"{base_cmd} run build")
         subprocess.check_call([base_cmd, "run", "build"], cwd=EXTENSION_DIR, shell=is_windows)
         
         # Verify build directory exists
         if not EXTENSION_BUILD_DIR.exists():
-            print(f"❌ Error: Build directory not found at {EXTENSION_BUILD_DIR}")
-            print("Check if 'plasmo build' succeeded and outputted to the correct folder.")
+            logger.error("Build directory not found", path=str(EXTENSION_BUILD_DIR))
             return
 
         # Zip the build
         zip_path = BUILD_DIR / "SafeRail_Extension.zip"
-        print(f"  > Creating zip at {zip_path}...")
+        logger.info("Packaging extension into zip", zip_path=str(zip_path))
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
             for root, dirs, files in os.walk(EXTENSION_BUILD_DIR):
                 for file in files:
                     file_path = os.path.join(root, file)
                     arcname = os.path.relpath(file_path, EXTENSION_BUILD_DIR)
                     zipf.write(file_path, arcname)
-        print(f"✅ Extension packaged: {zip_path}")
+        logger.info("Extension packaged successfully", zip_path=str(zip_path))
     except subprocess.CalledProcessError as e:
-        print(f"❌ Subprocess failed: {e}")
+        logger.error("Subprocess failed", error=str(e))
     except Exception as e:
-        print(f"❌ Failed to build extension: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error("Failed to build extension", error=str(e))
 
 def package_server():
     """Copies server files to the release directory."""
-    print("📦 Packaging Backend Server...")
+    logger.info("Packaging Backend Server")
     server_dist = BUILD_DIR / "backend"
     server_dist.mkdir(exist_ok=True)
     
-    # Files to include
-    files_to_copy = ["server.py", "requirements.txt", "setup.py"]
+    # Files to include (explicitly excluding serviceAccountKey.json)
+    files_to_copy = ["server.py", "requirements.txt", "setup.py", "Modelfile"]
     for f in files_to_copy:
-        shutil.copy(ROOT_DIR / f, server_dist / f)
+        src = ROOT_DIR / f
+        if src.exists():
+            shutil.copy(src, server_dist / f)
     
     # Create a start script for the server with robust python detection
     with open(server_dist / "start_server.bat", "w") as f:
@@ -97,7 +108,7 @@ def package_server():
         f.write(")\n")
         f.write("pause\n")
 
-    print(f"✅ Backend files prepared in: {server_dist}")
+    logger.info("Backend files prepared", destination=str(server_dist))
 
 def create_readme():
     """Creates a README for the release."""
@@ -108,7 +119,7 @@ def create_readme():
 ### 1. Backend Setup
 - Ensure you have **Python 3.10+** installed.
 - Ensure you have **Ollama** installed from [ollama.com](https://ollama.com).
-- Go to the `backend` folder.
+- **Security Step**: Obtain your `serviceAccountKey.json` from your Firebase Project and place it in the `backend` folder. This is required for analytics and compliance rule synchronization.
 - Run `start_server.bat`. 
   - This will create a virtual environment, install dependencies, and download the NLP model.
   - It will also pull the Llama 3.1 model in Ollama.
@@ -131,7 +142,7 @@ def main():
     build_extension()
     package_server()
     create_readme()
-    print(f"\n🎉 Packaging complete! Your release is ready in '{BUILD_DIR.name}'")
+    logger.info("Packaging complete", release_dir=str(BUILD_DIR))
 
 if __name__ == "__main__":
     main()

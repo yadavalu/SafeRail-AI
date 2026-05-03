@@ -3,9 +3,9 @@ import { db } from "../../firebase-config"
 import { doc, getDoc, updateDoc, increment, setDoc } from "firebase/firestore/lite"
 import localComplianceRules from "data-text:../../assets/compliance_rules.txt"
 
-const OLLAMA_ENDPOINT = "http://localhost:11434/api/generate"
+const OLLAMA_ENDPOINT = "http://localhost:11434/api/chat"
 const PRESIDIO_ENDPOINT = "http://localhost:3000/analyze"
-const MODEL_NAME = "llama3.1:8b-instruct-q4_K_M"
+const MODEL_NAME = "saferail-llama"
 
 // --- ANALYTICS ---
 const reportAnalytics = async (type: "scanned" | "warning" | "violation" | "confidential") => {
@@ -71,7 +71,6 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
   }
 
   await reportAnalytics("scanned");
-  const rules = await getRules();
 
   // 1. PRESIDIO CHECK
   try {
@@ -100,13 +99,9 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
         model: MODEL_NAME,
         format: "json",
         stream: false,
-        options: { temperature: 0 }, 
-        prompt: `
-          Evaluate INPUT_TEXT against RULESET thoroughly.
-          RULESET: ${rules}
-          INPUT_TEXT: ${text}
-          Respond with JSON: {"status": "green" | "warn" | "clear_warn", "explanation": "Short reason."}
-        `
+        messages: [
+          { role: "user", content: `INPUT_TEXT: ${text}` }
+        ],
       })
     }).catch(e => {
         throw new Error("LLM_SERVER_DOWN");
@@ -122,7 +117,7 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
         throw new Error(`LLM server error: ${response.statusText}`);
     }
     const data = await response.json()
-    const result = JSON.parse(data.response)
+    const result = JSON.parse(data.message.content)
 
     if (result.status === "clear_warn") await reportAnalytics("violation");
     if (result.status === "warn") await reportAnalytics("warning");

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react"
 import { auth, db } from "../firebase-config"
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth"
-import { doc, getDoc, setDoc, updateDoc, increment, collection, onSnapshot } from "firebase/firestore"
+import { doc, getDoc, setDoc, updateDoc, increment } from "firebase/firestore/lite"
 
 import bannerImg from "data-base64:../assets/banner.png"
 
@@ -12,6 +12,7 @@ export default function Dashboard() {
   
   const [unsafeDomains, setUnsafeDomains] = useState("")
   const [complianceRules, setComplianceRules] = useState("")
+  const [deniedEntities, setDeniedEntities] = useState<string[]>([])
   const [analytics, setAnalytics] = useState({
     scanned: 0,
     warning: 0,
@@ -24,14 +25,21 @@ export default function Dashboard() {
       setUser(u)
       if (u) {
         loadData()
-        const unsubAnalytics = onSnapshot(doc(db, "config", "analytics"), (doc) => {
-            if (doc.exists()) setAnalytics(doc.data() as any)
-        })
-        return () => unsubAnalytics()
+        // Lite doesn't support onSnapshot, so we just load once on login
+        loadAnalytics()
       }
     })
     return () => unsubscribe()
   }, [])
+
+  const loadAnalytics = async () => {
+    try {
+        const d = await getDoc(doc(db, "config", "analytics"))
+        if (d.exists()) setAnalytics(d.data() as any)
+    } catch (e) {
+        console.error("Analytics load error:", e)
+    }
+  }
 
   const loadData = async () => {
     const configRef = doc(db, "config", "settings")
@@ -39,6 +47,7 @@ export default function Dashboard() {
     if (d.exists()) {
       setUnsafeDomains(d.data().unsafe_domains || "")
       setComplianceRules(d.data().compliance_rules || "")
+      setDeniedEntities(d.data().denied_entities || [])
     }
   }
 
@@ -55,13 +64,25 @@ export default function Dashboard() {
     try {
       await setDoc(doc(db, "config", "settings"), {
         unsafe_domains: unsafeDomains,
-        compliance_rules: complianceRules
+        compliance_rules: complianceRules,
+        denied_entities: deniedEntities
       }, { merge: true })
-      alert("Settings saved successfully!")
+      alert("Settings saved successfully! Please restart the server to update the changes.")
     } catch (err) {
       alert("Save failed: " + err.message)
     }
   }
+
+  const toggleEntity = (entity: string) => {
+    setDeniedEntities(prev => 
+      prev.includes(entity) ? prev.filter(e => e !== entity) : [...prev, entity]
+    )
+  }
+
+  const PII_TYPES = [
+    "PERSON", "EMAIL_ADDRESS", "PHONE_NUMBER", "LOCATION", 
+    "IP_ADDRESS", "CREDIT_CARD", "CRYPTO", "US_SSN", "IBAN_CODE"
+  ]
 
   if (!user) {
     return (
@@ -125,6 +146,24 @@ export default function Dashboard() {
             />
           </div>
         </div>
+
+        <div style={{ marginTop: 20 }}>
+          <h3>Disabled Data Leak Checks (Presidio)</h3>
+          <p style={{ color: "#666", fontSize: 14 }}>Select entities you want to IGNORE during analysis.</p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 10 }}>
+            {PII_TYPES.map(type => (
+              <label key={type} style={{ background: "#eee", padding: "5px 10px", borderRadius: 5, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+                <input 
+                  type="checkbox" 
+                  checked={deniedEntities.includes(type)} 
+                  onChange={() => toggleEntity(type)}
+                />
+                {type.replace(/_/g, " ")}
+              </label>
+            ))}
+          </div>
+        </div>
+
         <button onClick={handleSave} style={{ marginTop: 20, padding: "12px 24px", background: "#28a745", color: "#fff", border: "none", borderRadius: 5, cursor: "pointer" }}>
           Save Configuration
         </button>
