@@ -81,6 +81,7 @@ To build easily on Windows
 
 Likewise, on Linux or MacOS
 ```bash
+chmod 777 ./build_release.sh
 ./build_release.sh
 ```
 
