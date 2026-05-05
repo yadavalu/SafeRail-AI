@@ -136,7 +136,7 @@ RULESET:
 INSTRUCTIONS:
 1. Analyze the INPUT_TEXT line-by-line.
 2. If a user deletes a violating line, do NOT mention it in the new analysis.
-3. You MUST respond ONLY with valid JSON.
+3. Respond ONLY with JSON: {{ "status": "green" | "warn" | "clear_warn", "explanation": "Short reason." }}
 4. If there is ANY mention of investment without 'Capital at risk', it is a "clear_warn".
 5. If there is ANY promise of returns, it is a "clear_warn".
 \"\"\"
