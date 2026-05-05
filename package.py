@@ -108,6 +108,36 @@ def package_server():
         f.write(")\n")
         f.write("pause\n")
 
+    # Create a start script for macOS and Linux
+    with open(server_dist / "start_server.sh", "w", newline='\n') as f:
+        f.write("#!/bin/bash\n\n")
+        f.write("echo \"===========================================\"\n")
+        f.write("echo \"  SafeRail.AI - Backend Starter\"\n")
+        f.write("echo \"===========================================\"\n\n")
+        f.write("# Detect Python command\n")
+        f.write("PYTHON_CMD=\"\"\n")
+        f.write("if command -v python3 >/dev/null 2>&1; then\n")
+        f.write("  PYTHON_CMD=\"python3\"\n")
+        f.write("elif command -v python >/dev/null 2>&1; then\n")
+        f.write("  PYTHON_CMD=\"python\"\n")
+        f.write("fi\n\n")
+        f.write("if [ -z \"$PYTHON_CMD\" ]; then\n")
+        f.write("    echo \"[ERROR] Python was not found. Please install Python 3.10+.\"\n")
+        f.write("    exit 1\n")
+        f.write("fi\n\n")
+        f.write("echo \"[INFO] Running environment setup...\"\n")
+        f.write("\"$PYTHON_CMD\" setup.py\n\n")
+        f.write("echo \"[INFO] Starting SafeRail Backend...\"\n")
+        f.write("if [ -f \"venv/bin/python\" ]; then\n")
+        f.write("    ./venv/bin/python server.py\n")
+        f.write("else\n")
+        f.write("    echo \"[ERROR] Virtual environment not found. Setup may have failed.\"\n")
+        f.write("fi\n")
+    
+    # Make the shell script executable if on a POSIX system
+    if os.name != 'nt':
+        os.chmod(server_dist / "start_server.sh", 0o755)
+
     logger.info("Backend files prepared", destination=str(server_dist))
 
 def create_readme():
@@ -120,9 +150,11 @@ def create_readme():
 - Ensure you have **Python 3.10+** installed.
 - Ensure you have **Ollama** installed from [ollama.com](https://ollama.com).
 - **Security Step**: Obtain your `serviceAccountKey.json` from your Firebase Project and place it in the `backend` folder. This is required for analytics and compliance rule synchronization.
-- Run `start_server.bat`. 
-  - This will create a virtual environment, install dependencies, and download the NLP model.
-  - It will also pull the Llama 3.1 model in Ollama.
+- **Run the starter script:**
+  - **Windows**: Run `start_server.bat`.
+  - **macOS/Linux**: Run `chmod +x start_server.sh && ./start_server.sh`.
+- This will create a virtual environment, install dependencies, and download the NLP model.
+- It will also pull the Llama 3.1 model in Ollama.
 
 ### 2. Extension Installation
 - Open Chrome or Edge.
