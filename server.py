@@ -168,7 +168,7 @@ def kill_existing_ollama():
             subprocess.run(["taskkill", "/F", "/IM", "ollama.exe", "/T"], capture_output=True)
             subprocess.run(["taskkill", "/F", "/IM", "ollama app.exe", "/T"], capture_output=True)
         elif sys.platform == "darwin": # macOS
-            subprocess.run(["pkill", "-9", "Ollama"], capture_output=True)
+            subprocess.run(["pkill", "-9", "ollama"], capture_output=True)
         else: # Linux
             subprocess.run(["pkill", "-f", "ollama"], capture_output=True)
         
