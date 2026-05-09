@@ -17,6 +17,7 @@ logger = structlog.get_logger()
 
 # Paths
 ROOT_DIR = Path(__file__).parent
+SCRIPTS_DIR = ROOT_DIR / "scripts"
 EXTENSION_DIR = ROOT_DIR / "extension"
 BUILD_DIR = ROOT_DIR / "dist_release"
 EXTENSION_BUILD_DIR = EXTENSION_DIR / "build" / "chrome-mv3-prod"
@@ -68,75 +69,49 @@ def package_server():
     logger.info("Packaging Backend Server")
     server_dist = BUILD_DIR / "backend"
     server_dist.mkdir(exist_ok=True)
-    
-    # Files to include (explicitly excluding serviceAccountKey.json)
-    files_to_copy = ["server.py", "requirements.txt", "setup.py", "Modelfile"]
-    for f in files_to_copy:
+
+    # Files to include
+    creds_to_copy = [
+        "serviceAccountKey.json"
+    ]
+
+    src_files_to_copy = [
+        "server.py", 
+        "requirements.txt", 
+        "setup.py", 
+        "Modelfile",
+        "start_server.bat",
+        "start_server.sh",
+        "Makefile"
+    ]
+
+    for f in src_files_to_copy:
+        src = SCRIPTS_DIR / f
+        if src.exists():
+            logger.info("Copying server file", file=f)
+            shutil.copy(src, server_dist / f)
+        else:
+            logger.warning("Source file not found", file=f)
+
+    for f in creds_to_copy:
         src = ROOT_DIR / f
         if src.exists():
+            logger.info("Copying credential file", file=f)
             shutil.copy(src, server_dist / f)
-    
-    # Create a start script for the server with robust python detection
-    with open(server_dist / "start_server.bat", "w") as f:
-        f.write("@echo off\n")
-        f.write("setlocal enabledelayedexpansion\n\n")
-        f.write("echo ===========================================\n")
-        f.write("echo   SafeRail.AI - Backend Starter\n")
-        f.write("echo ===========================================\n\n")
-        f.write(":: Detect Python command\n")
-        f.write("set \"PYTHON_CMD=\"\n")
-        f.write("python --version >nul 2>&1\n")
-        f.write("if !errorlevel! equ 0 ( set \"PYTHON_CMD=python\" ) else (\n")
-        f.write("  python3 --version >nul 2>&1\n")
-        f.write("  if !errorlevel! equ 0 ( set \"PYTHON_CMD=python3\" ) else (\n")
-        f.write("    py --version >nul 2>&1\n")
-        f.write("    if !errorlevel! equ 0 ( set \"PYTHON_CMD=py\" )\n")
-        f.write("  )\n")
-        f.write(")\n\n")
-        f.write("if \"%PYTHON_CMD%\"==\"\" (\n")
-        f.write("    echo [ERROR] Python was not found. Please install Python 3.10+.\n")
-        f.write("    pause\n")
-        f.write("    exit /b\n")
-        f.write(")\n\n")
-        f.write("echo [INFO] Running environment setup...\n")
-        f.write("%PYTHON_CMD% setup.py\n\n")
-        f.write("echo [INFO] Starting SafeRail Backend...\n")
-        f.write("if exist venv\\Scripts\\python.exe (\n")
-        f.write("    venv\\Scripts\\python server.py\n")
-        f.write(") else (\n")
-        f.write("    echo [ERROR] Virtual environment not found. Setup may have failed.\n")
-        f.write(")\n")
-        f.write("pause\n")
+        else:
+            logger.warning("Credential file not found (skipping)", file=f)
 
-    # Create a start script for macOS and Linux
-    with open(server_dist / "start_server.sh", "w", newline='\n') as f:
-        f.write("#!/bin/bash\n\n")
-        f.write("echo \"===========================================\"\n")
-        f.write("echo \"  SafeRail.AI - Backend Starter\"\n")
-        f.write("echo \"===========================================\"\n\n")
-        f.write("# Detect Python command\n")
-        f.write("PYTHON_CMD=\"\"\n")
-        f.write("if command -v python3 >/dev/null 2>&1; then\n")
-        f.write("  PYTHON_CMD=\"python3\"\n")
-        f.write("elif command -v python >/dev/null 2>&1; then\n")
-        f.write("  PYTHON_CMD=\"python\"\n")
-        f.write("fi\n\n")
-        f.write("if [ -z \"$PYTHON_CMD\" ]; then\n")
-        f.write("    echo \"[ERROR] Python was not found. Please install Python 3.10+.\"\n")
-        f.write("    exit 1\n")
-        f.write("fi\n\n")
-        f.write("echo \"[INFO] Running environment setup...\"\n")
-        f.write("\"$PYTHON_CMD\" setup.py\n\n")
-        f.write("echo \"[INFO] Starting SafeRail Backend...\"\n")
-        f.write("if [ -f \"venv/bin/python\" ]; then\n")
-        f.write("    ./venv/bin/python server.py\n")
-        f.write("else\n")
-        f.write("    echo \"[ERROR] Virtual environment not found. Setup may have failed.\"\n")
-        f.write("fi\n")
-    
-    # Make the shell script executable if on a POSIX system
-    if os.name != 'nt':
-        os.chmod(server_dist / "start_server.sh", 0o755)
+    # Copy assets for compliance rules
+    assets_src = ROOT_DIR / "extension" / "assets"
+    assets_dest = server_dist / "extension" / "assets"
+    if assets_src.exists():
+        logger.info("Copying assets directory")
+        shutil.copytree(assets_src, assets_dest, dirs_exist_ok=True)
+
+    # Ensure shell script is executable
+    sh_script = server_dist / "start_server.sh"
+    if sh_script.exists() and os.name != 'nt':
+        os.chmod(sh_script, 0o755)
 
     logger.info("Backend files prepared", destination=str(server_dist))
 

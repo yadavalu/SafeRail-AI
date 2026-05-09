@@ -37,7 +37,26 @@ The backend handles PII analysis (Presidio) and coordinates the custom Llama mod
     python server.py
     ```
 
-### 2. Browser Extension Setup (Plasmo)
+
+### 2. Build
+To build easily on Windows
+```ps
+.\Build_Release.bat
+```
+
+Likewise, on Linux or MacOS
+```bash
+chmod 777 ./build_release.sh
+./build_release.sh
+```
+
+Otherwise with Makefile
+```bash
+make setup
+make run
+```
+
+### 3. Browser Extension Setup (Plasmo)
 The extension provides the real-time UI overlay.
 
 1.  **Install Dependencies**:
@@ -71,19 +90,6 @@ The extension provides the real-time UI overlay.
     npm run dev
     ```
     - Load the `extension/build/chrome-mv3-dev` folder as an unpacked extension in Chrome.
-
-
-### 3. Build
-To build easily on Windows
-```ps
-.\Build_Release.bat
-```
-
-Likewise, on Linux or MacOS
-```bash
-chmod 777 ./build_release.sh
-./build_release.sh
-```
 
 
 ### 4. Admin Dashboard

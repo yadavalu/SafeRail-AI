@@ -1,0 +1,7 @@
+flask
+flask-cors
+presidio-analyzer
+spacy
+firebase-admin
+waitress
+structlog
