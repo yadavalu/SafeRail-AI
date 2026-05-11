@@ -25,6 +25,9 @@ if "%PYTHON_CMD%"=="" (
 echo [INFO] Running environment setup...
 %PYTHON_CMD% setup.py
 
+echo [INFO] Starting Ollama server in the background...
+ollama serve > ollama.log 2>&1 &
+
 echo [INFO] Starting SafeRail Backend...
 if exist venv\Scripts\python.exe (
     venv\Scripts\python server.py
