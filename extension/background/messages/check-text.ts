@@ -121,7 +121,7 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
 
     if (result.status === "clear_warn") await reportAnalytics("violation");
     if (result.status === "warn") await reportAnalytics("warning");
-    if (data.explanation == "") data.explanation = " ";
+    if (result.explanation == "") result.explanation = " ";
 
     res.send({
       status: result.status || "grey",
