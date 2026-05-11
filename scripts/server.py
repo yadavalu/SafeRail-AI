@@ -190,6 +190,7 @@ def start_ollama():
         # 1. Set the Environment Variable (Cross-platform)
         # Using '*' is more robust for local development/extension use
         os.environ["OLLAMA_ORIGINS"] = "*"
+        os.environ["OLLAMA_HOST"] = "0.0.0.0"
         
         logger.info("Launching Ollama", OLLAMA_ORIGINS="*")
 
