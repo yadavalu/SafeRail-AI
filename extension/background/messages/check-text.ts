@@ -3,8 +3,8 @@ import { db } from "../../firebase-config"
 import { doc, getDoc, updateDoc, increment, setDoc } from "firebase/firestore/lite"
 import localComplianceRules from "data-text:../../assets/compliance_rules.txt"
 
-const OLLAMA_ENDPOINT = "http://localhost:11434/api/chat"
-const PRESIDIO_ENDPOINT = "http://localhost:3000/analyze"
+const OLLAMA_ENDPOINT = "http://llm.safeseal.xyz/api/chat"
+const PRESIDIO_ENDPOINT = "http://pii.safeseal.xyz/analyze"
 const MODEL_NAME = "saferail-llama"
 
 // --- ANALYTICS ---
