@@ -5,3 +5,4 @@
 /dist_release
 /node_modules
 /serviceAccountKey.json
+/.config/config.yml

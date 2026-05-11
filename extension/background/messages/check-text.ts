@@ -3,8 +3,8 @@ import { db } from "../../firebase-config"
 import { doc, getDoc, updateDoc, increment, setDoc } from "firebase/firestore/lite"
 import localComplianceRules from "data-text:../../assets/compliance_rules.txt"
 
-const OLLAMA_ENDPOINT = "http://localhost:11434/api/chat"
-const PRESIDIO_ENDPOINT = "http://localhost:3000/analyze"
+const OLLAMA_ENDPOINT = "https://llm.safeseal.xyz/api/generate"
+const PRESIDIO_ENDPOINT = "https://pii.safeseal.xyz/analyze"
 const MODEL_NAME = "saferail-llama"
 
 // --- ANALYTICS ---
@@ -117,7 +117,8 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
         throw new Error(`LLM server error: ${response.statusText}`);
     }
     const data = await response.json()
-    const result = JSON.parse(data.message.content)
+    console.log(data);
+    const result = JSON.parse(data.message.content)  //.response?
 
     if (result.status === "clear_warn") await reportAnalytics("violation");
     if (result.status === "warn") await reportAnalytics("warning");

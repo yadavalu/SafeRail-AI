@@ -22,7 +22,9 @@ echo "[INFO] Running environment setup..."
 
 echo "[INFO] Starting SafeRail Backend..."
 if [ -f "venv/bin/python" ]; then
+    echo "[INFO] Starting Cloudflare Tunnel..."
+    cloudflared tunnel --protocol http2 --config ".cloudflared/config.yml" run safeseal_tunnel &
     ./venv/bin/python server.py
-else
+else (
     echo "[ERROR] Virtual environment not found. Setup may have failed."
 fi

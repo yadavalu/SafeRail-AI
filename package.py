@@ -85,13 +85,17 @@ def package_server():
         "Makefile"
     ]
 
+    venv_folder_to_copy = [
+        "venv"
+    ]
+
     for f in src_files_to_copy:
         src = SCRIPTS_DIR / f
         if src.exists():
             logger.info("Copying server file", file=f)
             shutil.copy(src, server_dist / f)
         else:
-            logger.warning("Source file not found", file=f)
+            logger.error("Source file not found (skipping)", file=f)
 
     for f in creds_to_copy:
         src = ROOT_DIR / f
@@ -99,7 +103,16 @@ def package_server():
             logger.info("Copying credential file", file=f)
             shutil.copy(src, server_dist / f)
         else:
-            logger.warning("Credential file not found (skipping)", file=f)
+            logger.error("Credential file not found (skipping)", file=f)
+
+    
+    for f in venv_folder_to_copy:
+        src = ROOT_DIR / f
+        if src.exists():
+            logger.info("Copying venv folder", file=f)
+            shutil.copytree(src, server_dist / f, dirs_exist_ok=True)
+        else:
+            logger.warning("Venv folder not found (skipping)", file=f)
 
     # Copy assets for compliance rules
     assets_src = ROOT_DIR / "extension" / "assets"
@@ -107,6 +120,13 @@ def package_server():
     if assets_src.exists():
         logger.info("Copying assets directory")
         shutil.copytree(assets_src, assets_dest, dirs_exist_ok=True)
+
+    # Copy Cloudflare config
+    cf_src = ROOT_DIR / ".cloudflared"
+    cf_dest = server_dist / ".cloudflared"
+    if cf_src.exists():
+        logger.info("Copying Cloudflare config")
+        shutil.copytree(cf_src, cf_dest, dirs_exist_ok=True)
 
     # Ensure shell script is executable
     sh_script = server_dist / "start_server.sh"

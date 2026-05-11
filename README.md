@@ -96,3 +96,18 @@ The extension provides the real-time UI overlay.
 Access the dashboard via the extension's dashboard tab (usually reachable at `chrome-extension://[ID]/tabs/dashboard.html`) to configure compliance rules and monitor analytics.
 
 
+### 5. Cloudflare Setup
+Windows
+```
+start cloudflared tunnel run saferail-api
+```
+
+Linux
+```
+sudo cloudflared service install  # Sets up systemd config
+sudo systemctl start cloudflared
+sudo systemctl enable cloudflared
+sudo systemctl status cloudflared
+```
+
+

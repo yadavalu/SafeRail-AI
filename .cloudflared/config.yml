@@ -1,0 +1,13 @@
+tunnel: 6fc591ff-9e0e-45e8-a352-d060e561666f
+credentials-file: C:\Users\User\.cloudflared\6fc591ff-9e0e-45e8-a352-d060e561666f.json
+
+ingress:
+  - hostname: llm.safeseal.xyz
+    service: http://localhost:11434
+    originRequest:
+      httpHostHeader: "localhost:11434"
+  - hostname: pii.safeseal.xyz
+    service: http://localhost:3000
+    originRequest:
+      httpHostHeader: "localhost:3000"
+  - service: http_status:404

@@ -25,6 +25,8 @@ $(VENV)/.setup_done: requirements.txt setup.py
 run: setup
 	@echo "[INFO] Starting SafeRail Backend..."
 	@if [ -f "$(PYTHON_VENV)" ]; then \
+		echo "[INFO] Starting Cloudflare Tunnel..."; \
+		(cloudflared tunnel --config ".cloudflared/config.yml" run saferail-api &); \
 		$(PYTHON_VENV) server.py; \
 	else \
 		echo "[ERROR] Virtual environment not found. Setup may have failed."; \
