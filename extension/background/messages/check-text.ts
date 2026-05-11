@@ -3,8 +3,8 @@ import { db } from "../../firebase-config"
 import { doc, getDoc, updateDoc, increment, setDoc } from "firebase/firestore/lite"
 import localComplianceRules from "data-text:../../assets/compliance_rules.txt"
 
-const OLLAMA_ENDPOINT = "http://localhost:11434/api/chat"
-const PRESIDIO_ENDPOINT = "http://localhost:3000/analyze"
+const OLLAMA_ENDPOINT = "http://zdsqe2fh1iah9r-11434.proxy.runpod.net/api/chat"
+const PRESIDIO_ENDPOINT = "http://zdsqe2fh1iah9r-3000.proxy.runpod.net/analyze"
 const MODEL_NAME = "saferail-llama"
 
 // --- ANALYTICS ---
@@ -121,6 +121,7 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
 
     if (result.status === "clear_warn") await reportAnalytics("violation");
     if (result.status === "warn") await reportAnalytics("warning");
+    if (data.explanation == "") data.explanation = " ";
 
     res.send({
       status: result.status || "grey",
