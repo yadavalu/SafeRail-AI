@@ -14,7 +14,15 @@ DEFINITIONS:
 - "status": "clear_warn" -> BLATANT violation (e.g., guaranteed returns, absolute claims like "best", or negative competitor mentions).
 
 RULESET:
-1. No promises of specific financial returns.
+1. No promises of specific financial returns (e.g., "guaranteed 10%").
+2. Do not use absolute terms like "best," "perfect," or "safest" without a citation.
+3. Must include the disclaimer "Capital at risk" when mentioning investments.
+4. No mention of competitor names in a negative light.
+5. All dates must be in DD/MM/YYYY format.
+6. No disguised personal data leakages, explicit and inexplicit.
+7. No mention of personal financial accounts
+8. No mentioning politics
+
 
 INSTRUCTIONS:
 1. Analyze the INPUT_TEXT line-by-line.

@@ -21,10 +21,10 @@ $(VENV)/.setup_done: requirements.txt setup.py
 	@echo "[INFO] Running environment setup..."
 	@$(PYTHON) setup.py
 	@touch $(VENV)/.setup_done
-	@echo "[INFO] Starting Ollama server in the background..."
-	@ollama serve > ollama.log 2>&1 &
 
 run: setup
+	@echo "[INFO] Starting Ollama server in the background..."
+	@ollama serve > ollama.log 2>&1 &
 	@echo "[INFO] Starting SafeRail Backend..."
 	@if [ -f "$(PYTHON_VENV)" ]; then \
 		$(PYTHON_VENV) server.py; \

@@ -34,6 +34,12 @@ const ComplianceWidget = () => {
   const [isVisible, setIsVisible] = useState(false)
   const [loading, setLoading] = useState(false)
   const [isConfidential, setIsConfidential] = useState(false)
+  const [isRewriting, setIsRewriting] = useState(false)
+
+  const [position, setPosition] = useState({ x: window.innerWidth - 350, y: window.innerHeight - 150 })
+  const [isDragging, setIsDragging] = useState(false)
+  const dragStart = useRef({ x: 0, y: 0 })
+  const lastElement = useRef<HTMLElement | null>(null)
 
   const typingTimer = useRef<NodeJS.Timeout | null>(null)
   const lastAnalyzedText = useRef<string>("")
@@ -41,6 +47,13 @@ const ComplianceWidget = () => {
 
   // Determine actual theme
   const [systemTheme, setSystemTheme] = useState<"light" | "dark">("light")
+
+  useEffect(() => {
+    // Initial position adjustment if window is small
+    const initialX = window.innerWidth - 350
+    const initialY = window.innerHeight - 150
+    setPosition({ x: initialX > 0 ? initialX : 20, y: initialY > 0 ? initialY : 20 })
+  }, [])
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
@@ -119,6 +132,16 @@ const ComplianceWidget = () => {
     return element.innerText || ""
   }
 
+  const setTextToElement = (element: HTMLElement, text: string) => {
+    if (element.tagName === "INPUT" || element.tagName === "TEXTAREA") {
+      (element as HTMLInputElement).value = text
+    } else {
+      element.innerText = text
+    }
+    // Dispatch input event so site knows it changed
+    element.dispatchEvent(new Event("input", { bubbles: true }))
+  }
+
   const checkCompliance = async (text: string) => {
     if (!text.trim()) {
       setStatus("grey")
@@ -168,10 +191,31 @@ const ComplianceWidget = () => {
     lastAnalyzedText.current = text
   }
 
+  const handleRewrite = async () => {
+    if (!lastElement.current) return
+    const text = getTextFromElement(lastElement.current)
+    if (!text.trim()) return
+
+    setIsRewriting(true)
+    const response = await sendToBackground({
+      name: "rewrite-text",
+      body: { text }
+    })
+    setIsRewriting(false)
+
+    if (response.rewrittenText) {
+      setTextToElement(lastElement.current, response.rewrittenText)
+      checkCompliance(response.rewrittenText)
+    } else if (response.error) {
+      setExplanation(`Rewrite Error: ${response.error}`)
+    }
+  }
+
   useEffect(() => {
     const handleInput = (e: Event) => {
       const target = e.target as HTMLElement
       if (!isTextField(target)) return
+      lastElement.current = target
       const text = getTextFromElement(target)
 
       if (typingTimer.current) clearTimeout(typingTimer.current)
@@ -192,6 +236,7 @@ const ComplianceWidget = () => {
         if (isHovering.current) return
         const activeEl = document.activeElement as HTMLElement
         if (isTextField(activeEl)) {
+            lastElement.current = activeEl
             setIsVisible(true)
             const text = getTextFromElement(activeEl)
             if (!text.trim()) {
@@ -201,7 +246,10 @@ const ComplianceWidget = () => {
                 checkCompliance(text)
             }
         } else {
-            setIsVisible(false)
+            // Only hide if not hovering the widget
+            if (!isHovering.current) {
+                setIsVisible(false)
+            }
         }
       }, 100)
     }
@@ -213,6 +261,38 @@ const ComplianceWidget = () => {
         document.removeEventListener("focusout", handleFocusChange)
     }
   }, [unsafeDomains])
+
+  // Drag logic
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true)
+    dragStart.current = {
+      x: e.clientX - position.x,
+      y: e.clientY - position.y
+    }
+  }
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return
+      setPosition({
+        x: e.clientX - dragStart.current.x,
+        y: e.clientY - dragStart.current.y
+      })
+    }
+    const handleMouseUp = () => {
+      setIsDragging(false)
+    }
+
+    if (isDragging) {
+      window.addEventListener("mousemove", handleMouseMove)
+      window.addEventListener("mouseup", handleMouseUp)
+    }
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove)
+      window.removeEventListener("mouseup", handleMouseUp)
+    }
+  }, [isDragging])
 
   if (!isVisible) return null
 
@@ -231,23 +311,49 @@ const ComplianceWidget = () => {
     return greyIcon
   }
 
+  const isGreen = status === "green"
+
   return (
     <div 
-      className={`compliance-widget theme-${appliedTheme} ${status} ${loading ? "pulsing" : ""}`}
+      className={`compliance-widget theme-${appliedTheme} ${status} ${loading ? "pulsing" : ""} ${isGreen ? "icon-only" : ""}`}
       onMouseEnter={() => { isHovering.current = true }}
       onMouseLeave={() => { isHovering.current = false }}
-      onPointerDown={(e) => { e.preventDefault(); e.stopPropagation() }}
+      onMouseDown={handleMouseDown}
+      style={{
+        left: `${position.x}px`,
+        top: `${position.y}px`,
+        cursor: isDragging ? "grabbing" : "grab",
+        position: "fixed",
+        bottom: "auto",
+        right: "auto"
+      }}
     >
       <div className="widget-header">
         <img src={getStatusIcon()} className="status-svg-icon" alt="status" />
-        <span>{getHeaderTitle()}</span>
+        {!isGreen && <span>{getHeaderTitle()}</span>}
       </div>
 
-      <div className="widget-content">
-        {explanation}
-      </div>
+      {!isGreen && (
+        <>
+          <div className="widget-content">
+            {explanation}
+          </div>
+          {(status === "warn" || status === "clear_warn") && (
+            <div className="widget-actions">
+              <button 
+                className="rewrite-button" 
+                onClick={(e) => { e.stopPropagation(); handleRewrite(); }}
+                disabled={isRewriting}
+              >
+                {isRewriting ? "Rewriting..." : "Rewrite for Compliance"}
+              </button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 }
+
 
 export default ComplianceWidget

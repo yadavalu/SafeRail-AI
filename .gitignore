@@ -5,3 +5,5 @@
 /dist_release
 /node_modules
 /serviceAccountKey.json
+/scripts/venv
+/scripts/*.log

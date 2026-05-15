@@ -1,11 +1,14 @@
 import type { PlasmoMessaging } from "@plasmohq/messaging"
+import { Storage } from "@plasmohq/storage"
 import { db } from "../../firebase-config"
 import { doc, getDoc, updateDoc, increment, setDoc } from "firebase/firestore/lite"
 import localComplianceRules from "data-text:../../assets/compliance_rules.txt"
 
-const OLLAMA_ENDPOINT = "http://zdsqe2fh1iah9r-11434.proxy.runpod.net/api/chat"
-const PRESIDIO_ENDPOINT = "http://zdsqe2fh1iah9r-3000.proxy.runpod.net/analyze"
+const storage = new Storage()
 const MODEL_NAME = "saferail-llama"
+
+const DEFAULT_OLLAMA = "http://localhost:11434/api/generate"
+const DEFAULT_PRESIDIO = "http://localhost:3000/analyze"
 
 // --- ANALYTICS ---
 const reportAnalytics = async (type: "scanned" | "warning" | "violation" | "confidential") => {
@@ -41,7 +44,8 @@ const getRules = async () => {
 // --- HELPER: Call Presidio ---
 const checkConfidentiality = async (text: string) => {
   try {
-    const response = await fetch(PRESIDIO_ENDPOINT, {
+    const endpoint = await storage.get("presidioEndpoint") || DEFAULT_PRESIDIO
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text })
@@ -50,10 +54,17 @@ const checkConfidentiality = async (text: string) => {
     });
 
     if (!response.ok) {
+        if (response.status === 404) {
+            throw new Error(`PRESIDIO_ERROR: 404 (Not Found). Please ensure your endpoint includes '/analyze' (e.g., ${DEFAULT_PRESIDIO}).`);
+        }
         throw new Error(`PRESIDIO_ERROR: ${response.status}`);
     }
     
-    return await response.json(); 
+    const data = await response.json();
+    if (!Array.isArray(data)) {
+        throw new Error(`PRESIDIO_ERROR: Invalid response format from ${endpoint}. Expected an array.`);
+    }
+    return data;
   } catch (error) {
     if (error.message === "PRESIDIO_DOWN") {
         throw new Error("Presidio (PII) server is down. Please start the backend.");
@@ -92,7 +103,8 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
 
   // 2. LLM CHECK
   try {
-    const response = await fetch(OLLAMA_ENDPOINT, {
+    const endpoint = await storage.get("ollamaEndpoint") || DEFAULT_OLLAMA
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -100,7 +112,7 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
         format: "json",
         stream: false,
         messages: [
-          { role: "user", content: `INPUT_TEXT: ${text}` }
+          { role: "user", content: `EVALUATE: ${text}` }
         ],
       })
     }).catch(e => {
@@ -117,7 +129,9 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
         throw new Error(`LLM server error: ${response.statusText}`);
     }
     const data = await response.json()
-    const result = JSON.parse(data.message.content)
+    console.log(data);
+    const result = JSON.parse(data.message.response)
+
 
     if (result.status === "clear_warn") await reportAnalytics("violation");
     if (result.status === "warn") await reportAnalytics("warning");

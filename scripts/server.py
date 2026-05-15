@@ -206,6 +206,14 @@ def start_ollama():
     except Exception as e:
         logger.error("Failed to start Ollama", error=str(e))
 
+@app.route("/", methods=["GET"])
+def health_check():
+    return jsonify({
+        "status": "online",
+        "service": "SafeRail Backend",
+        "endpoints": ["/analyze"]
+    })
+
 @app.route("/analyze", methods=["POST"])
 def analyze():
     data = request.json
@@ -250,5 +258,7 @@ if __name__ == "__main__":
     ollama_thread.start()
 
     from waitress import serve
-    logger.info("SafeRail Production Server (Waitress) running", url="http://localhost:3000")
+    logger.info("SafeRail Production Server (Waitress) running", 
+                health_check="http://localhost:3000/",
+                analyze_endpoint="http://localhost:3000/analyze")
     serve(app, host="0.0.0.0", port=3000)
