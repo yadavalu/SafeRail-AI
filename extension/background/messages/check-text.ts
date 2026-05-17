@@ -7,7 +7,7 @@ import localComplianceRules from "data-text:../../assets/compliance_rules.txt"
 const storage = new Storage()
 const MODEL_NAME = "saferail-llama"
 
-const DEFAULT_OLLAMA = "http://localhost:11434/api/generate"
+const DEFAULT_OLLAMA = "http://localhost:11434/api/chat"
 const DEFAULT_PRESIDIO = "http://localhost:3000/analyze"
 
 // --- ANALYTICS ---
@@ -128,9 +128,18 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
         }
         throw new Error(`LLM server error: ${response.statusText}`);
     }
+    
     const data = await response.json()
-    console.log(data);
-    const result = JSON.parse(data.message.response)
+    console.log("Ollama Raw Response:", data);
+    
+    // FIX 2: Corrected validation check to target data.message.content 
+    if (!data.message || !data.message.content) {
+        throw new Error("Invalid response from Ollama: message.content is missing");
+    }
+
+    // FIX 3: Changed data.message.response to data.message.content 
+    const result = JSON.parse(data.message.content)
+    console.log("Parsed LLM Result:", result);
 
 
     if (result.status === "clear_warn") await reportAnalytics("violation");

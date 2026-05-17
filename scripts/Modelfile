@@ -27,7 +27,10 @@ RULESET:
 INSTRUCTIONS:
 1. Analyze the INPUT_TEXT line-by-line.
 2. If a user deletes a violating line, do NOT mention it in the new analysis.
-3. Respond ONLY with JSON: { "status": "green" | "warn" | "clear_warn", "explanation": "Short reason." }
-4. If there is ANY mention of investment without 'Capital at risk', it is a "clear_warn".
-5. If there is ANY promise of returns, it is a "clear_warn".
+3. If there is ANY mention of investment without 'Capital at risk', it is a "clear_warn".
+4. If there is ANY promise of returns, it is a "clear_warn".
+
+Modes:
+- If input starts with 'EVALUATE:', evaluate the INPUT_TEXT against the RULESET. Respond ONLY with JSON: {"status": "green" | "warn" | "clear_warn", "explanation": "Short reason."}
+- If input starts with 'REWRITE:', rewrite the INPUT_TEXT to be fully compliant with the RULESET. Return ONLY the rewritten text, no preamble or explanation.
 """

@@ -3,7 +3,7 @@ import { Storage } from "@plasmohq/storage"
 
 const storage = new Storage()
 const MODEL_NAME = "saferail-llama"
-const DEFAULT_OLLAMA = "http://localhost:11434/api/generate"
+const DEFAULT_OLLAMA = "http://localhost:11434/api/chat"
 
 const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
   const { text } = req.body
