@@ -45,26 +45,21 @@ const ComplianceWidget = () => {
   const [isExpanded, setIsExpanded] = useState(false)
   const [snapCorner, setSnapCorner] = useState<"tl" | "tr" | "bl" | "br">("br")
 
-  const [position, setPosition] = useState({ x: window.innerWidth - 80, y: window.innerHeight - 80 })
+  const [dragPos, setDragPos] = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
   const hasDragged = useRef(false)
   const dragStart = useRef({ x: 0, y: 0 })
+  const dragInitialPos = useRef({ x: 0, y: 0 })
   const lastElement = useRef<HTMLElement | null>(null)
   const widgetRef = useRef<HTMLDivElement>(null)
 
   const typingTimer = useRef<NodeJS.Timeout | null>(null)
   const lastAnalyzedText = useRef<string>("")
   const isHovering = useRef(false) 
+  const hoverTimer = useRef<NodeJS.Timeout | null>(null)
 
   // Determine actual theme
   const [systemTheme, setSystemTheme] = useState<"light" | "dark">("light")
-
-  useEffect(() => {
-    // Initial position: Bottom Right corner
-    const initialX = window.innerWidth - 80
-    const initialY = window.innerHeight - 80
-    setPosition({ x: initialX > 0 ? initialX : 20, y: initialY > 0 ? initialY : 20 })
-  }, [])
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
@@ -282,12 +277,18 @@ const ComplianceWidget = () => {
 
   // Drag & Snap logic
   const handleMouseDown = (e: React.MouseEvent) => {
+    const rect = widgetRef.current?.getBoundingClientRect()
+    const startX = rect ? rect.left : 0
+    const startY = rect ? rect.top : 0
+
     setIsDragging(true)
     hasDragged.current = false
+    setDragPos({ x: startX, y: startY })
     dragStart.current = {
-      x: e.clientX - position.x,
-      y: e.clientY - position.y
+      x: e.clientX - startX,
+      y: e.clientY - startY
     }
+    dragInitialPos.current = { x: startX, y: startY }
   }
 
   useEffect(() => {
@@ -297,52 +298,47 @@ const ComplianceWidget = () => {
       const newX = e.clientX - dragStart.current.x
       const newY = e.clientY - dragStart.current.y
       
-      // If moved more than 5px, it's a drag, not a click
-      if (Math.abs(newX - position.x) > 5 || Math.abs(newY - position.y) > 5) {
+      if (Math.abs(newX - dragInitialPos.current.x) > 5 || Math.abs(newY - dragInitialPos.current.y) > 5) {
         hasDragged.current = true
       }
 
-      setPosition({ x: newX, y: newY })
+      setDragPos({ x: newX, y: newY })
     }
 
     const handleMouseUp = () => {
       if (!isDragging) return
       setIsDragging(false)
 
-      if (!hasDragged.current) {
-        // Toggle expansion if it was a click
-        setIsExpanded(!isExpanded)
-      } else {
-        // Snap to nearest corner
-        const margin = 20
-        const w = window.innerWidth
-        const h = window.innerHeight
-        
-        // Get actual dimensions
-        const rect = widgetRef.current?.getBoundingClientRect() || { width: 48, height: 48 }
-        const currentWidth = rect.width
-        const currentHeight = rect.height
-        
-        const snapPoints: { x: number, y: number, corner: "tl" | "tr" | "bl" | "br" }[] = [
-            { x: margin, y: margin, corner: "tl" }, // Top Left
-            { x: w - currentWidth - margin, y: margin, corner: "tr" }, // Top Right
-            { x: margin, y: h - currentHeight - margin, corner: "bl" }, // Bottom Left
-            { x: w - currentWidth - margin, y: h - currentHeight - margin, corner: "br" } // Bottom Right
-        ]
+      const w = window.innerWidth
+      const h = window.innerHeight
+      
+      const rect = widgetRef.current?.getBoundingClientRect() || { width: 48, height: 48, left: dragPos.x, top: dragPos.y }
+      const cx = rect.left + rect.width / 2
+      const cy = rect.top + rect.height / 2
+      
+      const snapPoints: { x: number, y: number, corner: "tl" | "tr" | "bl" | "br" }[] = [
+          { x: 0, y: 0, corner: "tl" },
+          { x: w, y: 0, corner: "tr" },
+          { x: 0, y: h, corner: "bl" },
+          { x: w, y: h, corner: "br" }
+      ]
 
-        let closest = snapPoints[0]
-        let minDist = Infinity
+      let closest = snapPoints[0]
+      let minDist = Infinity
 
-        snapPoints.forEach(p => {
-            const dist = Math.sqrt((position.x - p.x)**2 + (position.y - p.y)**2)
-            if (dist < minDist) {
-                minDist = dist
-                closest = p
-            }
-        })
+      snapPoints.forEach(p => {
+          const dist = Math.sqrt((cx - p.x)**2 + (cy - p.y)**2)
+          if (dist < minDist) {
+              minDist = dist
+              closest = p
+          }
+      })
 
-        setPosition({ x: closest.x, y: closest.y })
-        setSnapCorner(closest.corner)
+      setSnapCorner(closest.corner)
+
+      // Only expand if we are hovering and not just casually dropping it
+      if (isHovering.current) {
+        setIsExpanded(true)
       }
     }
 
@@ -355,40 +351,7 @@ const ComplianceWidget = () => {
       window.removeEventListener("mousemove", handleMouseMove)
       window.removeEventListener("mouseup", handleMouseUp)
     }
-  }, [isDragging, isExpanded, position])
-
-  // Re-snap on expansion/collapse
-  useEffect(() => {
-    if (!isVisible) return
-    
-    // Wait for the next frame to ensure the DOM has updated dimensions
-    const timer = setTimeout(() => {
-        const margin = 20
-        const w = window.innerWidth
-        const h = window.innerHeight
-        const rect = widgetRef.current?.getBoundingClientRect() || { width: 48, height: 48 }
-        
-        const newPos = { ...position }
-        
-        if (snapCorner === "tl") {
-            newPos.x = margin
-            newPos.y = margin
-        } else if (snapCorner === "tr") {
-            newPos.x = w - rect.width - margin
-            newPos.y = margin
-        } else if (snapCorner === "bl") {
-            newPos.x = margin
-            newPos.y = h - rect.height - margin
-        } else if (snapCorner === "br") {
-            newPos.x = w - rect.width - margin
-            newPos.y = h - rect.height - margin
-        }
-        
-        setPosition(newPos)
-    }, 50) 
-    
-    return () => clearTimeout(timer)
-  }, [isExpanded, isVisible])
+  }, [isDragging])
 
   if (!isVisible) return null
 
@@ -407,19 +370,69 @@ const ComplianceWidget = () => {
     return greyIcon
   }
 
+  const handleHover = (expand: boolean) => {
+    isHovering.current = expand
+    if (hoverTimer.current) clearTimeout(hoverTimer.current)
+    
+    hoverTimer.current = setTimeout(() => {
+        if (!isDragging) {
+            setIsExpanded(expand)
+        }
+    }, 150)
+  }
+
+  const getPositionStyles = (): React.CSSProperties => {
+    const margin = 20
+    if (isDragging) {
+      return {
+        left: `${dragPos.x}px`,
+        top: `${dragPos.y}px`,
+        right: 'auto',
+        bottom: 'auto',
+        transition: "none"
+      }
+    }
+
+    const styles: React.CSSProperties = {
+      transition: "all 0.3s cubic-bezier(0.19, 1, 0.22, 1)"
+    }
+
+    if (snapCorner === "tl") {
+      styles.left = `${margin}px`
+      styles.top = `${margin}px`
+      styles.right = 'auto'
+      styles.bottom = 'auto'
+    } else if (snapCorner === "tr") {
+      styles.right = `${margin}px`
+      styles.top = `${margin}px`
+      styles.left = 'auto'
+      styles.bottom = 'auto'
+    } else if (snapCorner === "bl") {
+      styles.left = `${margin}px`
+      styles.bottom = `${margin}px`
+      styles.right = 'auto'
+      styles.top = 'auto'
+    } else if (snapCorner === "br") {
+      styles.right = `${margin}px`
+      styles.bottom = `${margin}px`
+      styles.left = 'auto'
+      styles.top = 'auto'
+    }
+
+    return styles
+  }
+
   return (
     <div 
       ref={widgetRef}
       className={`compliance-widget theme-${appliedTheme} ${status} ${loading ? "pulsing" : ""} ${isExpanded ? "expanded" : "collapsed"}`}
-      onMouseEnter={() => { isHovering.current = true }}
-      onMouseLeave={() => { isHovering.current = false }}
+      onMouseEnter={() => handleHover(true)}
+      onMouseLeave={() => handleHover(false)}
       onMouseDown={handleMouseDown}
       style={{
-        left: `${position.x}px`,
-        top: `${position.y}px`,
+        ...getPositionStyles(),
         cursor: isDragging ? "grabbing" : (isExpanded ? "default" : "pointer"),
         position: "fixed",
-        transition: isDragging ? "none" : undefined
       }}
     >
       <div className="widget-header">
@@ -467,6 +480,5 @@ const ComplianceWidget = () => {
     </div>
   )
 }
-
 
 export default ComplianceWidget

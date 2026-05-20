@@ -49,6 +49,11 @@ def build_extension():
             logger.error("Build directory not found", path=str(EXTENSION_BUILD_DIR))
             return
 
+        # Copy to unzipped folder
+        extension_dest = BUILD_DIR / "SafeRail_Extension"
+        logger.info("Copying extension to unzipped folder", destination=str(extension_dest))
+        shutil.copytree(EXTENSION_BUILD_DIR, extension_dest, dirs_exist_ok=True)
+
         # Zip the build
         zip_path = BUILD_DIR / "SafeRail_Extension.zip"
         logger.info("Packaging extension into zip", zip_path=str(zip_path))

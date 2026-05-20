@@ -184,13 +184,34 @@
 
 /* --- LOADING PULSE --- */
 .pulsing {
-  animation: borderPulse 1.5s infinite ease-in-out;
+  animation: borderPulse 0.8s infinite alternate ease-in-out;
+  border-width: 2px;
 }
 
 @keyframes borderPulse {
-  0% { opacity: 0.9; }
-  50% { opacity: 1; }
-  100% { opacity: 0.9; }
+  0% { 
+    border-color: #3a3a3c;
+    box-shadow: 0 0 5px rgba(255, 255, 255, 0.1);
+  }
+  100% { 
+    border-color: #007aff;
+    box-shadow: 0 0 15px rgba(0, 122, 255, 0.4);
+  }
+}
+
+.theme-light .pulsing {
+  animation: borderPulseLight 0.8s infinite alternate ease-in-out;
+}
+
+@keyframes borderPulseLight {
+  0% { 
+    border-color: #c7c7cc;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.05);
+  }
+  100% { 
+    border-color: #007aff;
+    box-shadow: 0 0 12px rgba(0, 122, 255, 0.3);
+  }
 }
 
 .compliance-widget:hover {
