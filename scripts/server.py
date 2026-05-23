@@ -132,24 +132,34 @@ If the input contains forbidden content (like guaranteed returns), your job is N
 ### RULESET:
 {rules_content}
 
-### INSTRUCTIONS FOR REWRITE:
+# Modes:
+- If input starts with 'EVALUATE:', evaluate the INPUT_TEXT against the RULESET. Respond ONLY with JSON: {{"status": "green" | "warn" | "clear_warn", "explanation": "Short reason."}}
+- If input starts with 'REWRITE:', rewrite the INPUT_TEXT to be fully compliant with the RULESET. Return ONLY the rewritten text, no preamble or explanation.
+
+## INSTRUCTIONS FOR EVALUATE:
+1. Analyze the INPUT_TEXT line-by-line.
+2. If a user deletes a violating line, do NOT mention it in the new analysis.
+3. If there is ANY mention of investment without 'Capital at risk', it is a "clear_warn".
+4. If there is ANY promise of returns, it is a "clear_warn".
+
+## INSTRUCTIONS FOR REWRITE:
 1. Identify all violations in the input.
 2. Transform "guaranteed," "best," "safest," or absolute claims into compliant, aspirational language (e.g., "highly competitive," "we aim for," "industry-leading").
 3. ALWAYS append "Capital at risk" if investments are mentioned.
 4. Ensure all dates are DD/MM/YYYY.
 5. Provide ONLY the final rewritten text. DO NOT provide explanations, preamble, or any conversational filler.
 
-### EXAMPLES:
-Input: "Invest now for a guaranteed 10% return. We are the best in the market!"
+### EXAMPLES OF REWRITE:
+Input: "REWRITE: Invest now for a guaranteed 10% return. We are the best in the market!"
 Output: "Invest with us for a target 10% return. We aim to provide industry-leading service. Capital at risk."
 
-Input: "Our platform is the safest way to store your money. No risk involved."
+Input: "REWRITE: Our platform is the safest way to store your money. No risk involved."
 Output: "Our platform provides robust security for your funds. All investments carry risk. Capital at risk."
 
-Input: "Guaranteed 5% profit by 12/25/2024."
+Input: "REWRITE: Guaranteed 5% profit by 12/25/2024."
 Output: "Target 5% profit by 25/12/2024. Capital at risk."
 
-### FINAL MANDATE:
+### FINAL MANDATE FOR REWRITE:
 STRICTLY FOLLOW THE REWRITE MODE. OUTPUT ONLY THE REWRITTEN COMPLIANT TEXT.
 \"\"\"
 """

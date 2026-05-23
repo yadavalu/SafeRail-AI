@@ -4,7 +4,7 @@
   position: fixed;
   z-index: 2147483647; 
   
-  border-radius: 16px;
+  border-radius: 8px;
   
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   transition: all 0.3s cubic-bezier(0.19, 1, 0.22, 1);
@@ -15,12 +15,12 @@
   box-sizing: border-box;
 }
 
-/* Collapsed State (Circle) */
+/* Collapsed State (Square with rounded corners) */
 .compliance-widget.collapsed {
-  width: 48px;
-  height: 48px;
-  padding: 8px;
-  border-radius: 50%;
+  width: 56px;
+  height: 56px;
+  padding: 10px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -33,8 +33,8 @@
 }
 
 .compliance-widget.collapsed .status-svg-icon {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
 }
 
 /* Expanded State */
@@ -106,6 +106,12 @@
   gap: 12px;
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .status-svg-icon {
   width: 24px;
   height: 24px;
@@ -124,8 +130,8 @@
 .widget-actions {
   margin-top: 16px;
   display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .reset-button {
@@ -147,16 +153,46 @@
   background-color: rgba(255, 255, 255, 0.1);
 }
 
+.reset-button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  filter: grayscale(1);
+}
+
 .theme-light .reset-button:hover {
   background-color: rgba(0, 0, 0, 0.05);
 }
 
-.reset-button svg {
+.reset-button svg, .minimize-button svg {
   width: 18px;
   height: 18px;
 }
 
+.minimize-button {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
+  transition: opacity 0.2s, background-color 0.2s;
+}
+
+.minimize-button:hover {
+  opacity: 1;
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.theme-light .minimize-button:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
 .rewrite-button {
+  align-self: flex-end;
   background-color: #007aff;
   color: white;
   border: none;
@@ -180,6 +216,24 @@
 
 .theme-light .rewrite-button:disabled {
   background-color: #c7c7cc;
+}
+
+.action-divider {
+  width: 100%;
+  height: 1px;
+  background-color: rgba(255, 255, 255, 0.2);
+  margin: 4px 0;
+}
+
+.theme-light .action-divider {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.rewrite-description {
+  font-size: 12px;
+  opacity: 0.8;
+  text-align: left;
+  line-height: 1.4;
 }
 
 /* --- LOADING PULSE --- */

@@ -32,9 +32,18 @@ const ResetIcon = () => (
   </svg>
 )
 
+const MinimizeIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 14h6v6" />
+    <path d="M20 10h-6V4" />
+    <path d="M14 10l7-7" />
+    <path d="M10 14l-7 7" />
+  </svg>
+)
+
 const ComplianceWidget = () => {
   const [theme] = useStorage("theme", "system")
-  const [status, setStatus] = useState<"grey" | "green" | "warn" | "clear_warn">("grey")
+  const [status, setStatus] = useState<"grey" | "green" | "warn" | "clear_warn" | "error">("grey")
   const [explanation, setExplanation] = useState<string | null>("Ready to check.")
   const [unsafeDomains, setUnsafeDomains] = useState<string[]>([])
 
@@ -43,20 +52,22 @@ const ComplianceWidget = () => {
   const [isConfidential, setIsConfidential] = useState(false)
   const [isRewriting, setIsRewriting] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
+  const [isManuallyMinimized, setIsManuallyMinimized] = useState(false)
   const [snapCorner, setSnapCorner] = useState<"tl" | "tr" | "bl" | "br">("br")
+
+  const lastElement = useRef<HTMLElement | null>(null)
+  const widgetRef = useRef<HTMLDivElement>(null)
+  const isMouseOverWidget = useRef(false)
+  const isRewritingRef = useRef(false)
 
   const [dragPos, setDragPos] = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
   const hasDragged = useRef(false)
   const dragStart = useRef({ x: 0, y: 0 })
   const dragInitialPos = useRef({ x: 0, y: 0 })
-  const lastElement = useRef<HTMLElement | null>(null)
-  const widgetRef = useRef<HTMLDivElement>(null)
 
   const typingTimer = useRef<NodeJS.Timeout | null>(null)
   const lastAnalyzedText = useRef<string>("")
-  const isHovering = useRef(false) 
-  const hoverTimer = useRef<NodeJS.Timeout | null>(null)
 
   // Determine actual theme
   const [systemTheme, setSystemTheme] = useState<"light" | "dark">("light")
@@ -85,6 +96,13 @@ const ComplianceWidget = () => {
   }, [])
 
   const appliedTheme = theme === "system" ? systemTheme : theme
+
+  // Auto-expand on error/warn
+  useEffect(() => {
+    if (!isManuallyMinimized && (status === "warn" || status === "clear_warn" || status === "error")) {
+        setIsExpanded(true)
+    }
+  }, [status, isManuallyMinimized])
 
   // Load Unsafe Domains from Firebase or Local
   useEffect(() => {
@@ -148,12 +166,13 @@ const ComplianceWidget = () => {
     element.dispatchEvent(new Event("input", { bubbles: true }))
   }
 
-  const checkCompliance = async (text: string, force = false) => {
+  const checkCompliance = async (text: string, force = false): Promise<"grey" | "green" | "warn" | "clear_warn" | "error"> => {
     if (!text.trim()) {
       setStatus("grey")
       setExplanation("Ready to check.")
       lastAnalyzedText.current = ""
-      return
+      setIsManuallyMinimized(false)
+      return "grey"
     }
 
     const unsafeMatch = isCurrentSiteUnsafe()
@@ -165,9 +184,10 @@ const ComplianceWidget = () => {
         setExplanation(securityMsg)
     } 
 
-    if (!force && text.trim() === lastAnalyzedText.current.trim() && !unsafeMatch) return
+    if (!force && text.trim() === lastAnalyzedText.current.trim() && !unsafeMatch) return status
 
     setLoading(true)
+    setIsManuallyMinimized(false) // Reset on new check
 
     const platform = getPlatformContext()
 
@@ -195,6 +215,7 @@ const ComplianceWidget = () => {
     setStatus(finalStatus)
     setExplanation(finalExplanation)
     lastAnalyzedText.current = text
+    return finalStatus
   }
 
   const handleRewrite = async () => {
@@ -203,18 +224,26 @@ const ComplianceWidget = () => {
     if (!text.trim()) return
 
     setIsRewriting(true)
+    isRewritingRef.current = true
     const response = await sendToBackground({
       name: "rewrite-text",
       body: { text }
     })
-    setIsRewriting(false)
 
     if (response.rewrittenText) {
       setTextToElement(lastElement.current, response.rewrittenText)
-      checkCompliance(response.rewrittenText)
+      // Trust the rewrite and skip checking for compliance as requested
+      setStatus("green")
+      setExplanation("Rewritten for compliance.")
+      setIsExpanded(false)
+      setIsManuallyMinimized(true)
+      lastAnalyzedText.current = response.rewrittenText
     } else if (response.error) {
       setExplanation(`Rewrite Error: ${response.error}`)
+      setStatus("error")
     }
+    setIsRewriting(false)
+    isRewritingRef.current = false
   }
 
   const handleManualCheck = () => {
@@ -225,6 +254,7 @@ const ComplianceWidget = () => {
 
   useEffect(() => {
     const handleInput = (e: Event) => {
+      if (isRewritingRef.current) return // Skip checking during rewrite
       const target = e.target as HTMLElement
       if (!isTextField(target)) return
       lastElement.current = target
@@ -245,7 +275,6 @@ const ComplianceWidget = () => {
   useEffect(() => {
     const handleFocusChange = () => {
       setTimeout(() => {
-        if (isHovering.current) return
         const activeEl = document.activeElement as HTMLElement
         if (isTextField(activeEl)) {
             lastElement.current = activeEl
@@ -254,15 +283,18 @@ const ComplianceWidget = () => {
             if (!text.trim()) {
                 setStatus("grey")
                 setExplanation("Ready to check.")
+                setIsManuallyMinimized(false)
             } else {
                 checkCompliance(text)
             }
         } else {
-            // Only hide if not hovering the widget
-            if (!isHovering.current) {
+            // Check if focus is moving to the widget itself or if mouse is over it
+            setTimeout(() => {
+                if (isMouseOverWidget.current || (widgetRef.current && widgetRef.current.contains(document.activeElement))) return
                 setIsVisible(false)
                 setIsExpanded(false)
-            }
+                setIsManuallyMinimized(false)
+            }, 50)
         }
       }, 100)
     }
@@ -312,7 +344,7 @@ const ComplianceWidget = () => {
       const w = window.innerWidth
       const h = window.innerHeight
       
-      const rect = widgetRef.current?.getBoundingClientRect() || { width: 48, height: 48, left: dragPos.x, top: dragPos.y }
+      const rect = widgetRef.current?.getBoundingClientRect() || { width: 56, height: 56, left: dragPos.x, top: dragPos.y }
       const cx = rect.left + rect.width / 2
       const cy = rect.top + rect.height / 2
       
@@ -336,9 +368,10 @@ const ComplianceWidget = () => {
 
       setSnapCorner(closest.corner)
 
-      // Only expand if we are hovering and not just casually dropping it
-      if (isHovering.current) {
+      // Toggle expand on click (if not dragged)
+      if (!hasDragged.current && !isExpanded) {
         setIsExpanded(true)
+        setIsManuallyMinimized(false)
       }
     }
 
@@ -351,7 +384,7 @@ const ComplianceWidget = () => {
       window.removeEventListener("mousemove", handleMouseMove)
       window.removeEventListener("mouseup", handleMouseUp)
     }
-  }, [isDragging])
+  }, [isDragging, isExpanded])
 
   if (!isVisible) return null
 
@@ -360,6 +393,7 @@ const ComplianceWidget = () => {
     if (status === "clear_warn") return isConfidential ? "Data Leak Detected" : "Violation Detected"
     if (status === "warn") return "Warning"
     if (status === "green") return "Compliant"
+    if (status === "error") return "Error"
     return "Compliance"
   }
 
@@ -367,18 +401,14 @@ const ComplianceWidget = () => {
     if (status === "green") return greenIcon
     if (status === "warn") return orangeIcon
     if (status === "clear_warn") return redIcon
+    if (status === "error") return redIcon
     return greyIcon
   }
 
-  const handleHover = (expand: boolean) => {
-    isHovering.current = expand
-    if (hoverTimer.current) clearTimeout(hoverTimer.current)
-    
-    hoverTimer.current = setTimeout(() => {
-        if (!isDragging) {
-            setIsExpanded(expand)
-        }
-    }, 150)
+  const handleMinimize = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setIsExpanded(false)
+    setIsManuallyMinimized(true)
   }
 
   const getPositionStyles = (): React.CSSProperties => {
@@ -426,13 +456,15 @@ const ComplianceWidget = () => {
     <div 
       ref={widgetRef}
       className={`compliance-widget theme-${appliedTheme} ${status} ${loading ? "pulsing" : ""} ${isExpanded ? "expanded" : "collapsed"}`}
-      onMouseEnter={() => handleHover(true)}
-      onMouseLeave={() => handleHover(false)}
       onMouseDown={handleMouseDown}
+      onMouseEnter={() => { isMouseOverWidget.current = true }}
+      onMouseLeave={() => { isMouseOverWidget.current = false }}
+      tabIndex={-1}
       style={{
         ...getPositionStyles(),
         cursor: isDragging ? "grabbing" : (isExpanded ? "default" : "pointer"),
         position: "fixed",
+        outline: "none"
       }}
     >
       <div className="widget-header">
@@ -447,14 +479,25 @@ const ComplianceWidget = () => {
         </div>
         
         {isExpanded && (
-          <button 
-            className="reset-button" 
-            onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
-            onClick={(e) => { e.stopPropagation(); handleManualCheck(); }}
-            title="Re-run compliance check"
-          >
-            <ResetIcon />
-          </button>
+          <div className="header-right">
+            <button 
+              className="reset-button" 
+              onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+              onClick={(e) => { e.stopPropagation(); handleManualCheck(); }}
+              title="Re-run compliance check"
+              disabled={loading}
+            >
+              <ResetIcon />
+            </button>
+            <button 
+                className="minimize-button"
+                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                onClick={handleMinimize}
+                title="Minimize"
+            >
+                <MinimizeIcon />
+            </button>
+          </div>
         )}
       </div>
 
@@ -465,14 +508,20 @@ const ComplianceWidget = () => {
           </div>
           <div className="widget-actions">
             {(status === "warn" || status === "clear_warn") && (
-              <button 
-                className="rewrite-button" 
-                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                onClick={(e) => { e.stopPropagation(); handleRewrite(); }}
-                disabled={isRewriting}
-              >
-                {isRewriting ? "Rewriting..." : "Rewrite for Compliance"}
-              </button>
+              <>
+                <div className="action-divider" />
+                <div className="rewrite-description">
+                  Automatically rewrite text to fix violations.
+                </div>
+                <button 
+                  className="rewrite-button" 
+                  onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  onClick={(e) => { e.stopPropagation(); handleRewrite(); }}
+                  disabled={isRewriting}
+                >
+                  {isRewriting ? "Rewriting..." : "Rewrite for Compliance"}
+                </button>
+              </>
             )}
           </div>
         </>
