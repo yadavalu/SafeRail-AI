@@ -2,8 +2,7 @@ import type { PlasmoMessaging } from "@plasmohq/messaging"
 import { Storage } from "@plasmohq/storage"
 
 const storage = new Storage()
-const MODEL_NAME = "saferail-llama"
-const DEFAULT_OLLAMA = "http://localhost:11434/api/chat"
+const DEFAULT_LLM_REWRITE = "http://localhost:3000/rewrite"
 
 const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
   const { text } = req.body
@@ -14,17 +13,11 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
   }
 
   try {
-    const endpoint = await storage.get("ollamaEndpoint") || DEFAULT_OLLAMA
+    const endpoint = await storage.get("llmRewriteEndpoint") || DEFAULT_LLM_REWRITE
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: MODEL_NAME,
-        stream: false,
-        messages: [
-          { role: "user", content: `REWRITE: ${text}` }
-        ],
-      })
+      body: JSON.stringify({ text })
     }).catch(e => {
         throw new Error("LLM_SERVER_DOWN");
     });
@@ -34,7 +27,7 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
     }
     
     const data = await response.json()
-    const rewrittenText = data.message.content.trim()
+    const rewrittenText = data.rewrittenText || ""
 
     res.send({
       rewrittenText: rewrittenText

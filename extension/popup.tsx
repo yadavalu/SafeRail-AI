@@ -5,7 +5,8 @@ import bannerImg from "data-base64:./assets/banner_transparent.png"
 
 function IndexPopup() {
   const [theme, setTheme] = useStorage("theme", "system")
-  const [ollamaEndpoint, setOllamaEndpoint] = useStorage("ollamaEndpoint", "http://localhost:11434/api/chat")
+  const [llmEndpoint, setLlmEndpoint] = useStorage("llmEndpoint", "http://localhost:3000/evaluate")
+  const [llmRewriteEndpoint, setLlmRewriteEndpoint] = useStorage("llmRewriteEndpoint", "http://localhost:3000/rewrite")
   const [presidioEndpoint, setPresidioEndpoint] = useStorage("presidioEndpoint", "http://localhost:3000/analyze")
 
   // Determine actual theme
@@ -48,13 +49,24 @@ function IndexPopup() {
         </div>
 
         <div style={{ marginBottom: 16 }}>
-          <label style={{ display: "block", marginBottom: 8, fontWeight: 600, fontSize: 13, opacity: 0.8 }}>Ollama Endpoint</label>
+          <label style={{ display: "block", marginBottom: 8, fontWeight: 600, fontSize: 13, opacity: 0.8 }}>LLM Evaluate Endpoint</label>
           <input 
             type="text"
             className="input-field"
-            value={ollamaEndpoint}
-            onChange={(e) => setOllamaEndpoint(e.target.value)}
-            placeholder="http://localhost:11434/api/chat"
+            value={llmEndpoint}
+            onChange={(e) => setLlmEndpoint(e.target.value)}
+            placeholder="http://localhost:3000/evaluate"
+          />
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ display: "block", marginBottom: 8, fontWeight: 600, fontSize: 13, opacity: 0.8 }}>LLM Rewrite Endpoint</label>
+          <input 
+            type="text"
+            className="input-field"
+            value={llmRewriteEndpoint}
+            onChange={(e) => setLlmRewriteEndpoint(e.target.value)}
+            placeholder="http://localhost:3000/rewrite"
           />
         </div>
 

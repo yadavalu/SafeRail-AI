@@ -1,11 +1,14 @@
 import os
-import subprocess
-import threading
 import sys
-import time
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import structlog
+import json
+
+from dotenv import load_dotenv
+load_dotenv()
+
+import google.generativeai as genai
 
 # Configure structlog
 structlog.configure(
@@ -29,7 +32,6 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 
 # Initialize Firebase Admin
-# Expects serviceAccountKey.json in the same directory or parent
 db = None
 def initialize_firebase():
     global db
@@ -64,8 +66,15 @@ CORS(app)
 
 # Configuration
 SPACY_MODEL = "en_core_web_lg"
-BASE_MODEL = "llama3.1:8b-instruct-q4_K_M"
-OLLAMA_MODEL = "saferail-llama"
+GEMINI_MODEL_NAME = "gemini-2.5-pro"
+
+# Configure Gemini
+api_key = os.environ.get("GOOGLE_API_KEY")
+if api_key:
+    genai.configure(api_key=api_key)
+    logger.info("Gemini initialized with API key")
+else:
+    logger.warning("GOOGLE_API_KEY environment variable not found. Gemini calls will fail.")
 
 def ensure_spacy_model():
     """Checks if the spaCy model is installed, downloads it if not."""
@@ -74,63 +83,45 @@ def ensure_spacy_model():
         logger.info("SpaCy model already installed", model=SPACY_MODEL)
     except (OSError, ImportError):
         logger.info("Downloading SpaCy model", model=SPACY_MODEL)
+        import subprocess
         subprocess.check_call([sys.executable, "-m", "spacy", "download", SPACY_MODEL])
         logger.info("SpaCy model downloaded successfully", model=SPACY_MODEL)
 
-def ensure_ollama_model():
-    """
-    Checks if the Ollama model is available. 
-    Pulls rules from Firebase (if available) or local file to generate Modelfile.
-    """
-    logger.info("Checking for Ollama model", model=OLLAMA_MODEL)
-    try:
-        # Check if ollama is in PATH first
-        subprocess.run(["ollama", "--version"], check=True, capture_output=True)
-        
-        # 1. Fetch compliance rules
-        rules_content = None
-        
-        # Try Firebase first
-        if db:
-            try:
-                logger.info("Fetching compliance rules from Firebase")
-                doc_ref = db.collection("config").document("settings")
-                doc = doc_ref.get()
-                if doc.exists:
-                    rules_content = doc.to_dict().get("compliance_rules")
-                    if rules_content:
-                        logger.info("Rules fetched from Firebase")
-            except Exception as e:
-                logger.warning("Firebase fetch failed", error=str(e))
+def get_compliance_rules():
+    rules_content = None
+    if db:
+        try:
+            doc_ref = db.collection("config").document("settings")
+            doc = doc_ref.get()
+            if doc.exists:
+                rules_content = doc.to_dict().get("compliance_rules")
+        except Exception as e:
+            logger.warning("Firebase fetch failed", error=str(e))
 
-        # Fallback to local file
-        if not rules_content:
-            logger.info("Falling back to local compliance rules")
-            rules_path = os.path.join("extension", "assets", "compliance_rules.txt")
-            if os.path.exists(rules_path):
-                with open(rules_path, "r") as f:
-                    rules_content = f.read().strip()
-            else:
-                rules_content = "1. No promises of specific financial returns."
-                logger.warning("Local rules file not found, using default rules")
+    if not rules_content:
+        rules_path = os.path.join("extension", "assets", "compliance_rules.txt")
+        # Try finding it relative to different base dirs
+        if not os.path.exists(rules_path):
+            rules_path = os.path.join("..", "extension", "assets", "compliance_rules.txt")
+        if os.path.exists(rules_path):
+            with open(rules_path, "r") as f:
+                rules_content = f.read().strip()
+        else:
+            rules_content = "1. No promises of specific financial returns."
+            logger.warning("Local rules file not found, using default rules")
+            
+    return rules_content
 
-        # 2. Generate the Modelfile dynamically
-        modelfile_content = f"""FROM {BASE_MODEL}
-PARAMETER num_ctx 4096
-PARAMETER temperature 0
-PARAMETER num_predict 512
-PARAMETER top_k 10
-PARAMETER top_p 0.5
-
-SYSTEM \"\"\"
-# Definition
+def get_gemini_model():
+    rules_content = get_compliance_rules()
+    system_instruction = f"""# Definition
 You are a compliance expert for a company with compliance rules RULESET. You have two functions with your INPUT_TEXT: EVALUATE and REWRITE. EVALUATE takes the INPUT_TEXT and evaluates whether the text is compliant with the RULESET. REWRITE rewrites the INPUT_TEXT such that it is compliant with the RULESET
 
 # RULESET:
 {rules_content}
 
 # Modes:
-- If input starts with 'EVALUATE:', evaluate the INPUT_TEXT against the RULESET. Respond ONLY with JSON: {"status": "green" | "warn" | "clear_warn", "explanation": "Short reason."}
+- If input starts with 'EVALUATE:', evaluate the INPUT_TEXT against the RULESET. Respond ONLY with JSON: {{"status": "green" | "warn" | "clear_warn", "explanation": "Short reason."}}
 - If input starts with 'REWRITE:', rewrite the INPUT_TEXT to be fully compliant with the RULESET. Return ONLY the rewritten text, no preamble or explanation.
 
 ## INSTRUCTIONS FOR EVALUATE:
@@ -142,79 +133,34 @@ You are a compliance expert for a company with compliance rules RULESET. You hav
 1. Identify all violations in the input.
 2. The rewritten text should be compliant with the RULESET.
 3. Provide ONLY the final rewritten text. DO NOT provide explanations, preamble, or any conversational filler.
-\"\"\"
 """
-        with open("Modelfile", "w") as f:
-            f.write(modelfile_content)
-
-        # 3. Create/Update the custom model
-        logger.info("Synchronizing custom model", model=OLLAMA_MODEL)
-        subprocess.run(["ollama", "create", OLLAMA_MODEL, "-f", "Modelfile"], check=True)
-        logger.info("Custom model synchronized successfully", model=OLLAMA_MODEL)
-        
-    except (FileNotFoundError, subprocess.CalledProcessError) as e:
-        logger.warning("Ollama setup failed", error=str(e))
-        logger.warning("Please ensure Ollama is installed and the 'ollama' command is in your PATH")
+    return genai.GenerativeModel(
+        model_name=GEMINI_MODEL_NAME,
+        system_instruction=system_instruction,
+        generation_config=genai.types.GenerationConfig(
+            temperature=0,
+            top_p=0.5,
+            top_k=10,
+            max_output_tokens=8192,
+        ),
+        safety_settings={
+            genai.types.HarmCategory.HARM_CATEGORY_HARASSMENT: genai.types.HarmBlockThreshold.BLOCK_NONE,
+            genai.types.HarmCategory.HARM_CATEGORY_HATE_SPEECH: genai.types.HarmBlockThreshold.BLOCK_NONE,
+            genai.types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: genai.types.HarmBlockThreshold.BLOCK_NONE,
+            genai.types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: genai.types.HarmBlockThreshold.BLOCK_NONE,
+        }
+    )
 
 # Ensure environment is ready
 ensure_spacy_model()
-ensure_ollama_model()
-
-# Initialize the engine (loads the NLP model once at startup)
 analyzer = AnalyzerEngine()
-
-def kill_existing_ollama():
-    """Kills any existing Ollama processes to prevent port conflicts."""
-    logger.info("Checking for existing Ollama processes")
-    try:
-        if sys.platform == "win32":
-            subprocess.run(["taskkill", "/F", "/IM", "ollama.exe", "/T"], capture_output=True)
-            subprocess.run(["taskkill", "/F", "/IM", "ollama app.exe", "/T"], capture_output=True)
-        elif sys.platform == "darwin": # macOS
-            subprocess.run(["pkill", "-9", "ollama"], capture_output=True)
-            subprocess.run(["pkill", "-9", "Ollama"], capture_output=True)
-        else: # Linux
-            subprocess.run(["pkill", "-f", "ollama"], capture_output=True)
-            subprocess.run(["pkill", "-f", "Ollama"], capture_output=True)
-        
-        time.sleep(2)
-    except Exception:
-        pass 
-
-def start_ollama():
-    """
-    Sets the required environment variable and starts Ollama 
-    in a separate subprocess.
-    """
-    try:
-        # 0. Kill existing instances first
-        kill_existing_ollama()
-
-        # 1. Set the Environment Variable (Cross-platform)
-        # Using '*' is more robust for local development/extension use
-        os.environ["OLLAMA_ORIGINS"] = "*"
-        os.environ["OLLAMA_HOST"] = "0.0.0.0"
-        
-        logger.info("Launching Ollama", OLLAMA_ORIGINS="*")
-
-        # 2. Start 'ollama serve' as a non-blocking subprocess
-        subprocess.Popen(
-            ["ollama", "serve"], 
-            env=os.environ,
-            shell=False
-        )
-        
-    except FileNotFoundError:
-        logger.error("Could not find 'ollama'", action="Please ensure it is installed and added to your PATH")
-    except Exception as e:
-        logger.error("Failed to start Ollama", error=str(e))
 
 @app.route("/", methods=["GET"])
 def health_check():
     return jsonify({
         "status": "online",
         "service": "SafeRail Backend",
-        "endpoints": ["/analyze"]
+        "endpoints": ["/analyze", "/evaluate", "/rewrite"]
     })
 
 @app.route("/analyze", methods=["POST"])
@@ -225,7 +171,6 @@ def analyze():
     if not text:
         return jsonify([])
 
-    # Fetch denied entities from Firestore
     denied_entities = []
     if db:
         try:
@@ -236,15 +181,12 @@ def analyze():
         except Exception as e:
             logger.warning("Failed to fetch denied entities for analysis", error=str(e))
 
-    # Analyze text for PII entities
     results = analyzer.analyze(text=text, language='en')
     
     response = []
     for r in results:
-        # Skip results that are in the denied list
         if r.entity_type in denied_entities:
             continue
-            
         if r.score > 0.4:
             response.append({
                 "type": r.entity_type,
@@ -255,13 +197,71 @@ def analyze():
             
     return jsonify(response)
 
-if __name__ == "__main__":
-    # Start Ollama on a separate thread/process logic so it doesn't block Flask
-    ollama_thread = threading.Thread(target=start_ollama)
-    ollama_thread.start()
+@app.route("/evaluate", methods=["POST"])
+def evaluate():
+    data = request.json
+    text = data.get("text", "")
+    if not text:
+        return jsonify({"status": "grey", "explanation": "No text provided."})
 
+    try:
+        model = get_gemini_model()
+        # Enforce JSON output for evaluate
+        response = model.generate_content(
+            f"EVALUATE: {text}",
+            generation_config=genai.types.GenerationConfig(
+                response_mime_type="application/json"
+            )
+        )
+        if response.candidates and response.candidates[0].finish_reason != 1: # 1 is STOP
+             logger.warning("Gemini Evaluate finished with non-stop reason", 
+                            reason=response.candidates[0].finish_reason,
+                            text=getattr(response, 'text', 'N/A'))
+        
+        return response.text
+    except Exception as e:
+        logger.error("Gemini Evaluate Error", error=str(e))
+        return jsonify({"status": "grey", "explanation": f"LLM Error: {str(e)}"})
+
+@app.route("/rewrite", methods=["POST"])
+def rewrite():
+    data = request.json
+    text = data.get("text", "")
+    if not text:
+        return jsonify({"rewrittenText": ""})
+
+    try:
+        model = get_gemini_model()
+        response = model.generate_content(f"REWRITE: {text}")
+        
+        # Robust handling for potential blocked or limited responses
+        if response.candidates and response.candidates[0].finish_reason != 1:
+            logger.warning("Gemini Rewrite finished with non-stop reason", 
+                           reason=response.candidates[0].finish_reason)
+            
+        # Try to extract text safely
+        try:
+            return jsonify({"rewrittenText": response.text.strip()})
+        except ValueError:
+            # If response.text fails, it might be due to safety filters even with BLOCK_NONE
+            # or reaching token limit before any part is returned
+            if response.candidates:
+                candidate = response.candidates[0]
+                return jsonify({
+                    "error": f"Model failed to generate valid text. Finish reason: {candidate.finish_reason}",
+                    "rewrittenText": text # Fallback to original text
+                })
+            raise
+
+    except Exception as e:
+        logger.error("Gemini Rewrite Error", error=str(e))
+        return jsonify({"error": str(e)})
+
+if __name__ == "__main__":
     from waitress import serve
     logger.info("SafeRail Production Server (Waitress) running", 
                 health_check="http://localhost:3000/",
-                analyze_endpoint="http://localhost:3000/analyze")
+                analyze_endpoint="http://localhost:3000/analyze",
+                evaluate_endpoint="http://localhost:3000/evaluate",
+                rewrite_endpoint="http://localhost:3000/rewrite")
     serve(app, host="0.0.0.0", port=3000)

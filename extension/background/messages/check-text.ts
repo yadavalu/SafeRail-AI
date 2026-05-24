@@ -5,16 +5,14 @@ import { doc, getDoc, updateDoc, increment, setDoc } from "firebase/firestore/li
 import localComplianceRules from "data-text:../../assets/compliance_rules.txt"
 
 const storage = new Storage()
-const MODEL_NAME = "saferail-llama"
 
-const DEFAULT_OLLAMA = "http://localhost:11434/api/chat"
+const DEFAULT_LLM = "http://localhost:3000/evaluate"
 const DEFAULT_PRESIDIO = "http://localhost:3000/analyze"
 
 // --- ANALYTICS ---
 const reportAnalytics = async (type: "scanned" | "warning" | "violation" | "confidential") => {
     try {
         const ref = doc(db, "config", "analytics");
-        // Note: updateDoc in Lite works similarly but is more robust for one-offs
         await updateDoc(ref, {
             [type]: increment(1)
         }).catch(async (err) => {
@@ -103,44 +101,23 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
 
   // 2. LLM CHECK
   try {
-    const endpoint = await storage.get("ollamaEndpoint") || DEFAULT_OLLAMA
+    const endpoint = await storage.get("llmEndpoint") || DEFAULT_LLM
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: MODEL_NAME,
-        format: "json",
-        stream: false,
-        messages: [
-          { role: "user", content: `EVALUATE: ${text}` }
-        ],
-      })
+      body: JSON.stringify({ text })
     }).catch(e => {
         throw new Error("LLM_SERVER_DOWN");
     });
 
     if (!response.ok) {
-        if (response.status === 404) {
-            throw new Error(`LLM Model not found: ${MODEL_NAME}. Please run 'ollama pull ${MODEL_NAME}'`);
-        }
-        if (response.status === 403) {
-            throw new Error(`LLM server error: Forbidden (CORS). Please ensure Ollama is started with OLLAMA_ORIGINS="*" or 'chrome-extension://*'. Try restarting the backend server.py.`);
-        }
         throw new Error(`LLM server error: ${response.statusText}`);
     }
     
     const data = await response.json()
-    console.log("Ollama Raw Response:", data);
+    console.log("LLM Raw Response:", data);
     
-    // FIX 2: Corrected validation check to target data.message.content 
-    if (!data.message || !data.message.content) {
-        throw new Error("Invalid response from Ollama: message.content is missing");
-    }
-
-    // FIX 3: Changed data.message.response to data.message.content 
-    const result = JSON.parse(data.message.content)
-    console.log("Parsed LLM Result:", result);
-
+    const result = data;
 
     if (result.status === "clear_warn") await reportAnalytics("violation");
     if (result.status === "warn") await reportAnalytics("warning");
@@ -154,7 +131,7 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
 
   } catch (error) {
     let msg = error.message;
-    if (msg === "LLM_SERVER_DOWN") msg = "LLM Server (Ollama) is down. Please ensure Ollama is running.";
+    if (msg === "LLM_SERVER_DOWN") msg = "LLM Server is down. Please ensure backend is running.";
     res.send({ status: "grey", explanation: `ERROR: ${msg}`, confidential: false })
   }
 }
