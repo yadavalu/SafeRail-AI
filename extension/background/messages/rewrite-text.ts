@@ -2,7 +2,7 @@ import type { PlasmoMessaging } from "@plasmohq/messaging"
 import { Storage } from "@plasmohq/storage"
 
 const storage = new Storage()
-const DEFAULT_LLM_REWRITE = "http://localhost:3000/rewrite"
+const DEFAULT_LLM_REWRITE = "https://llm.safeseal.xyz/rewrite"
 
 const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
   const { text } = req.body

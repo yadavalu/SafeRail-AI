@@ -6,8 +6,8 @@ import localComplianceRules from "data-text:../../assets/compliance_rules.txt"
 
 const storage = new Storage()
 
-const DEFAULT_LLM = "http://localhost:3000/evaluate"
-const DEFAULT_PRESIDIO = "http://localhost:3000/analyze"
+const DEFAULT_LLM = "https://llm.safeseal.xyz/evaluate"
+const DEFAULT_PRESIDIO = "https://llm.safeseal.xyz/analyze"
 
 // --- ANALYTICS ---
 const reportAnalytics = async (type: "scanned" | "warning" | "violation" | "confidential") => {
