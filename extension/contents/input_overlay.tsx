@@ -19,7 +19,16 @@ export const config: PlasmoCSConfig = {
 
 export const getStyle = () => {
   const style = document.createElement("style")
-  style.textContent = styleText
+  style.textContent = `
+    ${styleText}
+    .compliance-underline {
+        text-decoration: underline red wavy !important;
+        text-decoration-thickness: 2px !important;
+        text-decoration-skip-ink: none !important;
+        background-color: rgba(255, 0, 0, 0.1) !important;
+        color: inherit !important;
+    }
+  `
   return style
 }
 
@@ -68,6 +77,84 @@ const ComplianceWidget = () => {
 
   const typingTimer = useRef<NodeJS.Timeout | null>(null)
   const lastAnalyzedText = useRef<string>("")
+
+  // --- HIGHLIGHTING LOGIC (DOM-BASED) ---
+  const applyUnderlines = (element: HTMLElement, violations: any[]) => {
+    console.log("Applying DOM underlines to:", element, "Violations:", violations);
+    
+    // 1. CLEAR PREVIOUS HIGHLIGHTS
+    // We search for our custom span and unwrap it
+    const existingHighlights = element.querySelectorAll(".compliance-underline");
+    existingHighlights.forEach(span => {
+      const parent = span.parentNode;
+      if (parent) {
+        while (span.firstChild) {
+          parent.insertBefore(span.firstChild, span);
+        }
+        parent.removeChild(span);
+      }
+    });
+    // Normalize to merge adjacent text nodes created by unwrapping
+    element.normalize();
+
+    if (!violations || violations.length === 0) return;
+
+    const fullText = getTextFromElement(element);
+
+    violations.forEach(v => {
+      let violationText = "";
+      if (typeof v === "string" && v.trim() !== "") {
+        violationText = v;
+      } else if (v.text) {
+        violationText = v.text;
+      } else {
+        // Fallback for PII which only has offsets (we'll try to extract the text)
+        if (typeof v.start === "number" && typeof v.end === "number") {
+          violationText = fullText.substring(v.start, v.end);
+        }
+      }
+
+      if (!violationText) return;
+
+      // 2. FIND AND HIGHLIGHT
+      // We use a tree walker to find text nodes and split them
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null);
+      let node: Node | null;
+      const nodesToProcess: Text[] = [];
+      
+      while (node = walker.nextNode()) {
+        nodesToProcess.push(node as Text);
+      }
+
+      // We need to find the violationText across potentially multiple text nodes
+      // This is a simplified version that works if the violation is within a single node
+      // or if we match exactly.
+      nodesToProcess.forEach(textNode => {
+        const content = textNode.textContent || "";
+        let index = content.indexOf(violationText);
+        
+        if (index !== -1) {
+          const range = document.createRange();
+          range.setStart(textNode, index);
+          range.setEnd(textNode, index + violationText.length);
+          
+          const wrapper = document.createElement("span");
+          wrapper.className = "compliance-underline";
+          // Use styles directly to ensure visibility
+          wrapper.style.textDecoration = "underline red wavy";
+          wrapper.style.textDecorationThickness = "2px";
+          wrapper.style.textDecorationSkipInk = "none";
+          wrapper.style.backgroundColor = "rgba(255, 0, 0, 0.1)";
+          
+          try {
+            range.surroundContents(wrapper);
+          } catch (e) {
+            console.error("Could not wrap violation:", e);
+          }
+        }
+      });
+    });
+  }
 
   // Determine actual theme
   const [systemTheme, setSystemTheme] = useState<"light" | "dark">("light")
@@ -215,6 +302,17 @@ const ComplianceWidget = () => {
     setStatus(finalStatus)
     setExplanation(finalExplanation)
     lastAnalyzedText.current = text
+
+    if (lastElement.current && !isRewritingRef.current) {
+        // Combine PII results and LLM highlight for highlighting
+        const allViolations = [
+            ...(response.pii || []),
+            response.highlight
+        ].filter(v => v !== undefined && v !== "")
+        
+        applyUnderlines(lastElement.current, allViolations)
+    }
+
     return finalStatus
   }
 
@@ -225,6 +323,10 @@ const ComplianceWidget = () => {
 
     setIsRewriting(true)
     isRewritingRef.current = true
+    
+    // Clear highlights before rewrite
+    applyUnderlines(lastElement.current, [])
+
     const response = await sendToBackground({
       name: "rewrite-text",
       body: { text }
@@ -294,6 +396,9 @@ const ComplianceWidget = () => {
                 setIsVisible(false)
                 setIsExpanded(false)
                 setIsManuallyMinimized(false)
+                // Clear highlights when focus is lost
+                // @ts-ignore
+                if (CSS.highlights) CSS.highlights.delete("compliance-violation")
             }, 50)
         }
       }, 100)

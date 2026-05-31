@@ -103,7 +103,7 @@ export default function Dashboard() {
     "IP_ADDRESS", "CREDIT_CARD", "CRYPTO", "US_SSN", "IBAN_CODE"
   ]
 
-  if (!user) {
+  if (!user || user.isAnonymous) {
     return (
       <div className={`theme-${appliedTheme}`} style={{ minHeight: "100vh", display: "flex", justifyContent: "center", alignItems: "center", backgroundColor: "var(--color-bg-dark)", color: "var(--color-text-dark)" }}>
         <div className="card" style={{ width: 400, textAlign: "center" }}>

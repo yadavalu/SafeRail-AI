@@ -275,3 +275,11 @@
 .compliance-widget.theme-light:hover {
     box-shadow: 0 16px 48px rgba(0,0,0,0.2);
 }
+
+/* --- HIGHLIGHTS --- */
+:root ::highlight(compliance-violation) {
+    text-decoration: underline red wavy !important;
+    text-decoration-thickness: 2px !important;
+    text-decoration-skip-ink: none !important;
+    background-color: rgba(255, 0, 0, 0.1) !important;
+}

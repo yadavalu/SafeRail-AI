@@ -28,6 +28,7 @@
     "typescript": "5.3.3"
   },
   "manifest": {
+    "permissions": ["activeTab", "storage"],
     "host_permissions": [
       "https://*/*",
       "http://localhost/*",

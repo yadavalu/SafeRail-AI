@@ -119,15 +119,24 @@ You are a compliance expert for a company with compliance rules RULESET. You hav
 
 # RULESET:
 {rules_content}
+Four-eye principle for commitments above EUR 5,000
+Trigger when the email appears to approve, accept, order, renew, amend, or commit to something with a value above EUR 5,000, and there is no clear authorized countersigner in cc                                                                                       Legal review trigger above EUR 150,000 or high-risk contract type
+Trigger when the email appears to send, approve, sign, accept, renew, amend, or negotiate a contract with total value above EUR 150,000, or when the email involves legal-review triggers such as personal data processing or uncertain clauses.
+Circumvention or threshold-splitting language
+Trigger when the email suggests splitting contracts, purchase orders, scopes, or invoices to avoid approval, Legal review, signing thresholds, or procurement process.
 
 # Modes:
-- If input starts with 'EVALUATE:', evaluate the INPUT_TEXT against the RULESET. Respond ONLY with JSON: {{"status": "green" | "warn" | "clear_warn", "explanation": "Short reason."}}
+- If input starts with 'EVALUATE:', evaluate the INPUT_TEXT against the RULESET. Respond ONLY with JSON: {{"status": "green" | "warn" | "clear_warn", "explanation": "Short reason.", "highlight": "exact problematic text from INPUT_TEXT to underline"}}
 - If input starts with 'REWRITE:', rewrite the INPUT_TEXT to be fully compliant with the RULESET. Return ONLY the rewritten text, no preamble or explanation.
 
 ## INSTRUCTIONS FOR EVALUATE:
 1. Analyze the INPUT_TEXT line-by-line.
-2. If a user deletes a violating line, do NOT mention it in the new analysis.
-3. Any violation of the RULESET by the text should be flagged based on intensity of the violation as "warn" or "clear_warn". Otherwise "green" if no violations found
+2. Identify the exact text segment that causes the violation.
+3. If multiple violations exist, pick the most critical one for the "highlight" field.
+4. If no violations exist, "highlight" should be an empty string "".
+5. The "highlight" field MUST contain text that exists exactly as-is within the INPUT_TEXT.
+6. Any violation of the RULESET by the text should be flagged based on intensity of the violation as "warn" or "clear_warn". Otherwise "green" if no violations found.
+
 
 ## INSTRUCTIONS FOR REWRITE:
 1. Identify all violations in the input.

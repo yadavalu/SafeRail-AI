@@ -1,7 +1,8 @@
 import type { PlasmoMessaging } from "@plasmohq/messaging"
 import { Storage } from "@plasmohq/storage"
-import { db } from "../../firebase-config"
+import { auth, db } from "../../firebase-config"
 import { doc, getDoc, updateDoc, increment, setDoc } from "firebase/firestore/lite"
+import { signInAnonymously } from "firebase/auth"
 import localComplianceRules from "data-text:../../assets/compliance_rules.txt"
 
 const storage = new Storage()
@@ -12,6 +13,9 @@ const DEFAULT_PRESIDIO = "https://llm.safeseal.xyz/analyze"
 // --- ANALYTICS ---
 const reportAnalytics = async (type: "scanned" | "warning" | "violation" | "confidential") => {
     try {
+        if (!auth.currentUser) {
+            await signInAnonymously(auth);
+        }
         const ref = doc(db, "config", "analytics");
         await updateDoc(ref, {
             [type]: increment(1)
@@ -19,6 +23,8 @@ const reportAnalytics = async (type: "scanned" | "warning" | "violation" | "conf
             if (err.code === "not-found" || err.message?.includes("no entity")) {
                 await setDoc(ref, { scanned: 0, warning: 0, violation: 0, confidential: 0 }, { merge: true });
                 await updateDoc(ref, { [type]: increment(1) });
+            } else {
+                throw err;
             }
         });
     } catch (e) {
@@ -90,11 +96,13 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
       res.send({
         status: "clear_warn",
         confidential: true,
+        pii: piiResults,
         explanation: `Sensitive data detected: ${foundTypes}. \n\nThis violates confidentiality protocols.`
       })
       return 
     }
-  } catch (error) {
+  }
+ catch (error) {
     res.send({ status: "grey", explanation: `ERROR: ${error.message}`, confidential: false });
     return;
   }
@@ -126,7 +134,8 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
     res.send({
       status: result.status || "grey",
       explanation: result.explanation || "Error parsing response.",
-      confidential: false
+      confidential: false,
+      highlight: result.highlight || ""
     })
 
   } catch (error) {
