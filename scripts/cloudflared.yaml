@@ -1,0 +1,20 @@
+tunnel: 6fc591ff-9e0e-45e8-a352-d060e561666f
+credentials-file: C:\Users\User\.cloudflared\6fc591ff-9e0e-45e8-a352-d060e561666f.json
+
+ingress:
+  # Route Gemini API traffic
+  - hostname: llm.safeseal.xyz
+    path: ^/gemini/.*
+    service: http://localhost:3000
+
+  # Route Ollama API traffic
+  - hostname: llm.safeseal.xyz
+    path: ^/api/.*
+    service: http://localhost:11434
+
+  # Route Presidio / Health check traffic
+  - hostname: llm.safeseal.xyz
+    service: http://localhost:3000
+
+  # Catch-all 404
+  - service: http_status:404

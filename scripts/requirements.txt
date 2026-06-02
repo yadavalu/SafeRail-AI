@@ -5,3 +5,5 @@ spacy
 firebase-admin
 waitress
 structlog
+google-generativeai
+python-dotenv

@@ -14,12 +14,14 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
   }
 
   try {
-    const endpoint = await storage.get("ollamaEndpoint") || DEFAULT_OLLAMA
+    const modelType = await storage.get("modelType") || "gemini"
+    const endpoint = await storage.get("ollamaEndpoint") || (modelType === "gemini" ? "https://llm.safeseal.xyz/gemini/chat" : DEFAULT_OLLAMA)
+
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: MODEL_NAME,
+        model: modelType === "llama" ? MODEL_NAME : "gemini-1.5-flash",
         stream: false,
         messages: [
           { role: "user", content: `REWRITE: ${text}` }
@@ -30,10 +32,20 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
     });
 
     if (!response.ok) {
-        throw new Error(`LLM server error: ${response.statusText}`);
+        let errorMsg = response.statusText;
+        try {
+            const errorData = await response.json();
+            if (errorData && errorData.error) errorMsg = errorData.error;
+        } catch (e) {}
+        throw new Error(`LLM server error: ${errorMsg || response.status}`);
     }
     
     const data = await response.json()
+    
+    if (!data.message || !data.message.content) {
+        throw new Error("Invalid response from LLM server");
+    }
+
     const rewrittenText = data.message.content.trim()
 
     res.send({

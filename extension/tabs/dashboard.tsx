@@ -107,7 +107,14 @@ export default function Dashboard() {
     return (
       <div className={`theme-${appliedTheme}`} style={{ minHeight: "100vh", display: "flex", justifyContent: "center", alignItems: "center", backgroundColor: "var(--color-bg-dark)", color: "var(--color-text-dark)" }}>
         <div className="card" style={{ width: 400, textAlign: "center" }}>
-          <img src={bannerImg} style={{ width: "80%", marginBottom: 30 }} />
+          <img 
+            src={bannerImg} 
+            style={{ 
+              width: "80%", 
+              marginBottom: 30,
+              filter: appliedTheme === "dark" ? "invert(1)" : "none"
+            }} 
+          />
           <h1 style={{ marginBottom: 30, fontSize: 24, fontWeight: 800 }}>Admin Login</h1>
           <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <input 

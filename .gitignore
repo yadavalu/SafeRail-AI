@@ -1,3 +1,4 @@
+/scripts/.env
 /extension/.env
 /.env
 /venv
@@ -6,4 +7,5 @@
 /node_modules
 /serviceAccountKey.json
 /scripts/venv
+/scripts/serviceAccountKey.json
 /scripts/*.log

@@ -103,13 +103,15 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
 
   // 2. LLM CHECK
   try {
-    const endpoint = await storage.get("ollamaEndpoint") || DEFAULT_OLLAMA
+    const modelType = await storage.get("modelType") || "gemini"
+    const endpoint = await storage.get("ollamaEndpoint") || (modelType === "gemini" ? "https://llm.safeseal.xyz/gemini/chat" : DEFAULT_OLLAMA)
+    
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: MODEL_NAME,
-        format: "json",
+        model: modelType === "llama" ? MODEL_NAME : "gemini-1.5-flash",
+        format: modelType === "llama" ? "json" : undefined,
         stream: false,
         messages: [
           { role: "user", content: `EVALUATE: ${text}` }
@@ -120,25 +122,49 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
     });
 
     if (!response.ok) {
+        let errorMsg = response.statusText;
+        try {
+            const errorData = await response.json();
+            if (errorData && errorData.error) errorMsg = errorData.error;
+        } catch (e) {}
+
         if (response.status === 404) {
             throw new Error(`LLM Model not found: ${MODEL_NAME}. Please run 'ollama pull ${MODEL_NAME}'`);
         }
         if (response.status === 403) {
-            throw new Error(`LLM server error: Forbidden (CORS). Please ensure Ollama is started with OLLAMA_ORIGINS="*" or 'chrome-extension://*'. Try restarting the backend server.py.`);
+            throw new Error(`LLM server error: Forbidden (CORS). Please ensure server is started with proper origins. Try restarting the backend server.py.`);
         }
-        throw new Error(`LLM server error: ${response.statusText}`);
+        throw new Error(`LLM server error: ${errorMsg || response.status}`);
     }
     
     const data = await response.json()
-    console.log("Ollama Raw Response:", data);
+    console.log("LLM Raw Response:", data);
     
-    // FIX 2: Corrected validation check to target data.message.content 
-    if (!data.message || !data.message.content) {
-        throw new Error("Invalid response from Ollama: message.content is missing");
+    let content = "";
+
+    if (modelType === "gemini") {
+        if (!data.message || !data.message.content) {
+            throw new Error("Invalid response from Gemini server");
+        }
+        content = data.message.content;
+    } else {
+        if (!data.message || !data.message.content) {
+            throw new Error("Invalid response from Ollama: message.content is missing");
+        }
+        content = data.message.content;
     }
 
-    // FIX 3: Changed data.message.response to data.message.content 
-    const result = JSON.parse(data.message.content)
+    // Attempt to parse JSON result
+    let result;
+    try {
+        // Clean markdown code blocks if present
+        const cleanContent = content.replace(/```json\n?|\n?```/g, "").trim();
+        result = JSON.parse(cleanContent);
+    } catch (e) {
+        console.error("JSON Parse Error:", e, "Content:", content);
+        throw new Error("Failed to parse compliance evaluation result.");
+    }
+    
     console.log("Parsed LLM Result:", result);
 
 
