@@ -54,11 +54,17 @@ const ComplianceWidget = () => {
   const [isExpanded, setIsExpanded] = useState(false)
   const [isManuallyMinimized, setIsManuallyMinimized] = useState(false)
   const [snapCorner, setSnapCorner] = useState<"tl" | "tr" | "bl" | "br">("br")
+  const [dismissInterception, setDismissInterception] = useState(false)
+  const [expandedAfterSend, setExpandedAfterSend] = useState(false)
 
   const lastElement = useRef<HTMLElement | null>(null)
   const widgetRef = useRef<HTMLDivElement>(null)
   const isMouseOverWidget = useRef(false)
   const isRewritingRef = useRef(false)
+  const isCheckingOnSend = useRef(false)
+  const lastSendButton = useRef<HTMLElement | null>(null)
+  const lastSendKeyboardTarget = useRef<HTMLElement | null>(null)
+  const lastSendEventInfo = useRef<{ctrlKey: boolean, metaKey: boolean} | null>(null)
 
   const [dragPos, setDragPos] = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
@@ -68,6 +74,7 @@ const ComplianceWidget = () => {
 
   const typingTimer = useRef<NodeJS.Timeout | null>(null)
   const lastAnalyzedText = useRef<string>("")
+  const bypassInterception = useRef(false)
 
   // Determine actual theme
   const [systemTheme, setSystemTheme] = useState<"light" | "dark">("light")
@@ -97,12 +104,12 @@ const ComplianceWidget = () => {
 
   const appliedTheme = theme === "system" ? systemTheme : theme
 
-  // Auto-expand on error/warn
+  // Auto-expand on error/warn (ONLY if it happened during a send interception)
   useEffect(() => {
-    if (!isManuallyMinimized && (status === "warn" || status === "clear_warn" || status === "error")) {
+    if (expandedAfterSend && !isManuallyMinimized && (status === "warn" || status === "clear_warn" || status === "error")) {
         setIsExpanded(true)
     }
-  }, [status, isManuallyMinimized])
+  }, [status, isManuallyMinimized, expandedAfterSend])
 
   // Load Unsafe Domains from Firebase or Local
   useEffect(() => {
@@ -277,6 +284,10 @@ const ComplianceWidget = () => {
       setTimeout(() => {
         const activeEl = document.activeElement as HTMLElement
         if (isTextField(activeEl)) {
+            if (lastElement.current !== activeEl) {
+                setDismissInterception(false)
+                setExpandedAfterSend(false) // Reset expansion state for new field
+            }
             lastElement.current = activeEl
             setIsVisible(true)
             const text = getTextFromElement(activeEl)
@@ -290,10 +301,12 @@ const ComplianceWidget = () => {
         } else {
             // Check if focus is moving to the widget itself or if mouse is over it
             setTimeout(() => {
+                if (isCheckingOnSend.current) return 
                 if (isMouseOverWidget.current || (widgetRef.current && widgetRef.current.contains(document.activeElement))) return
                 setIsVisible(false)
                 setIsExpanded(false)
                 setIsManuallyMinimized(false)
+                setExpandedAfterSend(false) // Reset on hide
             }, 50)
         }
       }, 100)
@@ -385,6 +398,117 @@ const ComplianceWidget = () => {
       window.removeEventListener("mouseup", handleMouseUp)
     }
   }, [isDragging, isExpanded])
+
+  const isSendButton = (el: HTMLElement): boolean => {
+    const ariaLabel = el.getAttribute("aria-label") || ""
+    const role = el.getAttribute("role")
+    const isGmailSend = role === "button" && ariaLabel.toLowerCase().includes("send")
+    
+    // Outlook/other platforms
+    const isStandardSend = (el.tagName === "BUTTON" || role === "button") && 
+                           (el.innerText.trim().toLowerCase() === "send" || 
+                            ariaLabel.toLowerCase().includes("send"))
+    
+    return isGmailSend || isStandardSend
+  }
+
+  const handleHaltAndCheck = async (triggerElement: HTMLElement): Promise<boolean> => {
+    if (dismissInterception) return true
+
+    let textField = lastElement.current
+    
+    // Find text field if lastElement is missing or detached
+    if (!textField || !document.body.contains(textField)) {
+        let parent = triggerElement.parentElement
+        while (parent && parent !== document.body) {
+            const body = parent.querySelector('[aria-label="Message body"], [contenteditable="true"]') as HTMLElement
+            if (body && isTextField(body)) {
+                textField = body
+                break
+            }
+            parent = parent.parentElement
+        }
+    }
+
+    if (!textField) return true
+
+    isCheckingOnSend.current = true
+    const text = getTextFromElement(textField)
+    const resultStatus = await checkCompliance(text, true)
+    isCheckingOnSend.current = false
+
+    if (resultStatus === "green" || resultStatus === "grey") {
+        return true
+    } else {
+        setExpandedAfterSend(true) // Mark that we hit a violation on send
+        setIsVisible(true)
+        setIsExpanded(true)
+        setIsManuallyMinimized(false)
+        return false
+    }
+  }
+
+  useEffect(() => {
+    const handleCaptureClick = async (e: MouseEvent) => {
+        if (bypassInterception.current) return
+
+        let target = e.target as HTMLElement
+        while (target && target !== document.body) {
+            if (isSendButton(target)) {
+                lastSendButton.current = target
+                lastSendKeyboardTarget.current = null // Clear keyboard ref if clicking
+                e.preventDefault()
+                e.stopImmediatePropagation()
+                
+                const success = await handleHaltAndCheck(target)
+                if (success) {
+                    bypassInterception.current = true
+                    target.click()
+                    setTimeout(() => { bypassInterception.current = false }, 500)
+                }
+                return
+            }
+            target = target.parentElement as HTMLElement
+        }
+    }
+
+    const handleKeyDown = async (e: KeyboardEvent) => {
+        if (bypassInterception.current) return
+        if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+            const target = e.target as HTMLElement
+            if (isTextField(target)) {
+                lastSendKeyboardTarget.current = target
+                lastSendButton.current = null // Clear button ref if keyboard
+                lastSendEventInfo.current = { ctrlKey: e.ctrlKey, metaKey: e.metaKey }
+                
+                e.preventDefault()
+                e.stopImmediatePropagation()
+
+                const success = await handleHaltAndCheck(target)
+                if (success) {
+                    bypassInterception.current = true
+                    const newEvent = new KeyboardEvent("keydown", {
+                        key: "Enter",
+                        code: "Enter",
+                        ctrlKey: e.ctrlKey,
+                        metaKey: e.metaKey,
+                        bubbles: true,
+                        cancelable: true
+                    })
+                    target.dispatchEvent(newEvent)
+                    setTimeout(() => { bypassInterception.current = false }, 500)
+                }
+            }
+        }
+    }
+
+    document.addEventListener("click", handleCaptureClick, true)
+    document.addEventListener("keydown", handleKeyDown, true)
+    return () => {
+        document.removeEventListener("click", handleCaptureClick, true)
+        document.removeEventListener("keydown", handleKeyDown, true)
+    }
+  }, [])
 
   if (!isVisible) return null
 
@@ -504,6 +628,11 @@ const ComplianceWidget = () => {
       {isExpanded && (
         <>
           <div className="widget-content">
+            {expandedAfterSend && (
+                <div className="halt-notice">
+                    Sending halted.
+                </div>
+            )}
             {explanation}
           </div>
           <div className="widget-actions">
@@ -521,6 +650,39 @@ const ComplianceWidget = () => {
                 >
                   {isRewriting ? "Rewriting..." : "Rewrite for Compliance"}
                 </button>
+                {expandedAfterSend && (
+                    <button 
+                        className="dismiss-button" 
+                        onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                        onClick={(e) => { 
+                            e.stopPropagation(); 
+                            setDismissInterception(true); 
+                            setIsExpanded(false);
+                            
+                            // Immediately trigger the send
+                            if (lastSendButton.current) {
+                                bypassInterception.current = true;
+                                lastSendButton.current.click();
+                                setTimeout(() => { bypassInterception.current = false }, 500);
+                            } else if (lastSendKeyboardTarget.current && lastSendEventInfo.current) {
+                                bypassInterception.current = true;
+                                const newEvent = new KeyboardEvent("keydown", {
+                                    key: "Enter",
+                                    code: "Enter",
+                                    ctrlKey: lastSendEventInfo.current.ctrlKey,
+                                    metaKey: lastSendEventInfo.current.metaKey,
+                                    bubbles: true,
+                                    cancelable: true
+                                });
+                                lastSendKeyboardTarget.current.dispatchEvent(newEvent);
+                                setTimeout(() => { bypassInterception.current = false }, 500);
+                            }
+                        }}
+                        title="Allow sending without further checks for this message"
+                    >
+                        Dismiss & Send
+                    </button>
+                )}
               </>
             )}
           </div>
