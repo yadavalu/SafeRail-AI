@@ -9,6 +9,7 @@ function IndexPopup() {
   const [baseHost, setBaseHost] = useStorage("baseHost", "https://llm.safeseal.xyz")
   const [ollamaEndpoint, setOllamaEndpoint] = useStorage("ollamaEndpoint", "https://llm.safeseal.xyz/gemini/chat")
   const [presidioEndpoint, setPresidioEndpoint] = useStorage("presidioEndpoint", "https://llm.safeseal.xyz/analyze")
+  const [realTimeAnalysis, setRealTimeAnalysis] = useStorage("realTimeAnalysis", false)
   const [showAdvanced, setShowAdvanced] = useState(false)
 
   // Determine actual theme
@@ -87,6 +88,48 @@ function IndexPopup() {
               <option value="gemini">Gemini</option>
               <option value="llama">Llama</option>
             </select>
+          </div>
+        </div>
+
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between', 
+          marginBottom: 20, 
+          padding: '12px 16px', 
+          backgroundColor: appliedTheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)', 
+          borderRadius: 8, 
+          border: `1px solid ${appliedTheme === 'dark' ? 'var(--color-border-dark)' : 'var(--color-border-light)'}` 
+        }}>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>Real-Time Analysis</div>
+            <div style={{ fontSize: 11, opacity: 0.6, marginTop: 2 }}>
+              {realTimeAnalysis ? "Scanning email text in real-time as you type" : "Scanning text only when clicking Send button"}
+            </div>
+          </div>
+          <div 
+            onClick={() => setRealTimeAnalysis(!realTimeAnalysis)}
+            style={{
+              width: 44,
+              height: 24,
+              backgroundColor: realTimeAnalysis ? 'var(--color-success)' : (appliedTheme === 'dark' ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)'),
+              borderRadius: 12,
+              position: 'relative',
+              cursor: 'pointer',
+              transition: 'background-color 0.2s'
+            }}
+          >
+            <div style={{
+              width: 20,
+              height: 20,
+              backgroundColor: '#fff',
+              borderRadius: '50%',
+              position: 'absolute',
+              top: 2,
+              left: realTimeAnalysis ? 22 : 2,
+              transition: 'left 0.2s',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+            }} />
           </div>
         </div>
 

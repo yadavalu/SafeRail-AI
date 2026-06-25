@@ -43,9 +43,13 @@ const MinimizeIcon = () => (
 
 const ComplianceWidget = () => {
   const [theme] = useStorage("theme", "system")
+  const [realTimeAnalysis] = useStorage("realTimeAnalysis", false)
   const [status, setStatus] = useState<"grey" | "green" | "warn" | "clear_warn" | "error">("grey")
   const [explanation, setExplanation] = useState<string | null>("Ready to check.")
   const [unsafeDomains, setUnsafeDomains] = useState<string[]>([])
+
+  const sendButtonRef = useRef<HTMLElement | null>(null)
+  const isProgrammaticSend = useRef(false)
 
   const [isVisible, setIsVisible] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -59,6 +63,19 @@ const ComplianceWidget = () => {
   const widgetRef = useRef<HTMLDivElement>(null)
   const isMouseOverWidget = useRef(false)
   const isRewritingRef = useRef(false)
+
+  const statusRef = useRef<"grey" | "green" | "warn" | "clear_warn" | "error">("grey")
+  const isLoadingRef = useRef(false)
+
+  const updateStatus = (newStatus: "grey" | "green" | "warn" | "clear_warn" | "error") => {
+    setStatus(newStatus)
+    statusRef.current = newStatus
+  }
+
+  const updateLoading = (newLoading: boolean) => {
+    setLoading(newLoading)
+    isLoadingRef.current = newLoading
+  }
 
   const [dragPos, setDragPos] = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
@@ -168,7 +185,7 @@ const ComplianceWidget = () => {
 
   const checkCompliance = async (text: string, force = false): Promise<"grey" | "green" | "warn" | "clear_warn" | "error"> => {
     if (!text.trim()) {
-      setStatus("grey")
+      updateStatus("grey")
       setExplanation("Ready to check.")
       lastAnalyzedText.current = ""
       setIsManuallyMinimized(false)
@@ -180,13 +197,13 @@ const ComplianceWidget = () => {
 
     if (unsafeMatch) {
         securityMsg = `SECURITY ALERT: ${unsafeMatch} is prohibited.`
-        setStatus("clear_warn")
+        updateStatus("clear_warn")
         setExplanation(securityMsg)
     } 
 
-    if (!force && text.trim() === lastAnalyzedText.current.trim() && !unsafeMatch) return status
+    if (!force && text.trim() === lastAnalyzedText.current.trim() && !unsafeMatch) return statusRef.current
 
-    setLoading(true)
+    updateLoading(true)
     setIsManuallyMinimized(false) // Reset on new check
 
     const platform = getPlatformContext()
@@ -196,7 +213,7 @@ const ComplianceWidget = () => {
       body: { text, platform }
     })
 
-    setLoading(false)
+    updateLoading(false)
 
     let finalStatus = response.status
     let finalExplanation = response.explanation
@@ -212,7 +229,7 @@ const ComplianceWidget = () => {
         finalStatus = "clear_warn"
     }
 
-    setStatus(finalStatus)
+    updateStatus(finalStatus)
     setExplanation(finalExplanation)
     lastAnalyzedText.current = text
     return finalStatus
@@ -233,14 +250,14 @@ const ComplianceWidget = () => {
     if (response.rewrittenText) {
       setTextToElement(lastElement.current, response.rewrittenText)
       // Trust the rewrite and skip checking for compliance as requested
-      setStatus("green")
+      updateStatus("green")
       setExplanation("Rewritten for compliance.")
       setIsExpanded(false)
       setIsManuallyMinimized(true)
       lastAnalyzedText.current = response.rewrittenText
     } else if (response.error) {
       setExplanation(`Rewrite Error: ${response.error}`)
-      setStatus("error")
+      updateStatus("error")
     }
     setIsRewriting(false)
     isRewritingRef.current = false
@@ -258,6 +275,13 @@ const ComplianceWidget = () => {
       const target = e.target as HTMLElement
       if (!isTextField(target)) return
       lastElement.current = target
+
+      if (!realTimeAnalysis) {
+        updateStatus("grey")
+        setExplanation("Ready to check.")
+        return
+      }
+
       const text = getTextFromElement(target)
 
       if (typingTimer.current) clearTimeout(typingTimer.current)
@@ -270,7 +294,7 @@ const ComplianceWidget = () => {
     }
     document.addEventListener("input", handleInput)
     return () => document.removeEventListener("input", handleInput)
-  }, [unsafeDomains]) // Re-bind if domains change
+  }, [unsafeDomains, realTimeAnalysis]) // Re-bind if domains/toggle change
 
   useEffect(() => {
     const handleFocusChange = () => {
@@ -279,9 +303,17 @@ const ComplianceWidget = () => {
         if (isTextField(activeEl)) {
             lastElement.current = activeEl
             setIsVisible(true)
+            
+            if (!realTimeAnalysis) {
+                updateStatus("grey")
+                setExplanation("Ready to check.")
+                setIsManuallyMinimized(false)
+                return
+            }
+
             const text = getTextFromElement(activeEl)
             if (!text.trim()) {
-                setStatus("grey")
+                updateStatus("grey")
                 setExplanation("Ready to check.")
                 setIsManuallyMinimized(false)
             } else {
@@ -291,6 +323,12 @@ const ComplianceWidget = () => {
             // Check if focus is moving to the widget itself or if mouse is over it
             setTimeout(() => {
                 if (isMouseOverWidget.current || (widgetRef.current && widgetRef.current.contains(document.activeElement))) return
+                
+                // If real-time is off and we are scanning/loading or displaying a warning/error, do not auto-hide the widget on focus loss
+                if (!realTimeAnalysis && (isLoadingRef.current || ["warn", "clear_warn", "error"].includes(statusRef.current))) {
+                    return
+                }
+
                 setIsVisible(false)
                 setIsExpanded(false)
                 setIsManuallyMinimized(false)
@@ -305,7 +343,133 @@ const ComplianceWidget = () => {
         document.removeEventListener("focusin", handleFocusChange)
         document.removeEventListener("focusout", handleFocusChange)
     }
-  }, [unsafeDomains])
+  }, [unsafeDomains, realTimeAnalysis])
+
+  const findSendButton = (el: HTMLElement | null): HTMLElement | null => {
+    let current: HTMLElement | null = el
+    for (let i = 0; i < 5 && current; i++) {
+      const tooltip = current.getAttribute("data-tooltip") || ""
+      const ariaLabel = current.getAttribute("aria-label") || ""
+      const role = current.getAttribute("role") || ""
+      const text = current.innerText || ""
+      
+      if (
+        (role === "button" && (tooltip.toLowerCase().includes("send") || ariaLabel.toLowerCase().includes("send"))) ||
+        (text.trim().toLowerCase() === "send") ||
+        (current.tagName === "BUTTON" && text.trim().toLowerCase() === "send")
+      ) {
+        return current
+      }
+      current = current.parentElement
+    }
+    return null
+  }
+
+  const handleDismissAndSend = () => {
+    if (sendButtonRef.current) {
+      isProgrammaticSend.current = true
+      sendButtonRef.current.click()
+      isProgrammaticSend.current = false
+      setIsExpanded(false)
+      setIsVisible(false)
+    }
+  }
+
+  useEffect(() => {
+    const handleSendClick = async (e: MouseEvent) => {
+      if (realTimeAnalysis) return
+      if (isProgrammaticSend.current) return
+
+      const target = e.target as HTMLElement
+      const sendBtn = findSendButton(target)
+      if (!sendBtn) return
+
+      // Intercept Send button click!
+      e.preventDefault()
+      e.stopPropagation()
+      e.stopImmediatePropagation()
+
+      sendButtonRef.current = sendBtn
+
+      const textElement = lastElement.current || (document.activeElement as HTMLElement)
+      if (!textElement || !isTextField(textElement)) {
+        isProgrammaticSend.current = true
+        sendBtn.click()
+        isProgrammaticSend.current = false
+        return
+      }
+
+      setIsVisible(true)
+      setIsExpanded(true)
+
+      const text = getTextFromElement(textElement)
+      const finalStatus = await checkCompliance(text, true)
+
+      if (finalStatus === "green") {
+        setIsVisible(false)
+        setIsExpanded(false)
+        isProgrammaticSend.current = true
+        sendBtn.click()
+        isProgrammaticSend.current = false
+      } else {
+        setIsVisible(true)
+        setIsExpanded(true)
+      }
+    }
+
+    document.addEventListener("click", handleSendClick, true)
+    return () => document.removeEventListener("click", handleSendClick, true)
+  }, [realTimeAnalysis, unsafeDomains, status])
+
+  useEffect(() => {
+    const handleKeyDown = async (e: KeyboardEvent) => {
+      if (realTimeAnalysis) return
+      if (isProgrammaticSend.current) return
+
+      const isCtrlEnter = (e.ctrlKey || e.metaKey) && e.key === "Enter"
+      if (!isCtrlEnter) return
+
+      const target = e.target as HTMLElement
+      if (!isTextField(target)) return
+
+      // Intercept Ctrl+Enter send!
+      e.preventDefault()
+      e.stopPropagation()
+      e.stopImmediatePropagation()
+
+      // Find the Send button for programmatic click later
+      const composeContainer = target.closest('.M9, .AD, form, [role="main"]')
+      const sendButton = (composeContainer?.querySelector('div[role="button"][data-tooltip*="Send"], div[role="button"][aria-label*="Send"], button[type="submit"]') ||
+                           document.querySelector('div[role="button"][data-tooltip*="Send"], div[role="button"][aria-label*="Send"], button[type="submit"]')) as HTMLElement
+
+      if (!sendButton) {
+        console.warn("SafeRail: Could not find Send button for Ctrl+Enter intercept")
+        return
+      }
+
+      sendButtonRef.current = sendButton
+
+      setIsVisible(true)
+      setIsExpanded(true)
+
+      const text = getTextFromElement(target)
+      const finalStatus = await checkCompliance(text, true)
+
+      if (finalStatus === "green") {
+        setIsVisible(false)
+        setIsExpanded(false)
+        isProgrammaticSend.current = true
+        sendButton.click()
+        isProgrammaticSend.current = false
+      } else {
+        setIsVisible(true)
+        setIsExpanded(true)
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown, true)
+    return () => document.removeEventListener("keydown", handleKeyDown, true)
+  }, [realTimeAnalysis, unsafeDomains, status])
 
   // Drag & Snap logic
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -503,6 +667,21 @@ const ComplianceWidget = () => {
 
       {isExpanded && (
         <>
+          {!realTimeAnalysis && (status === "warn" || status === "clear_warn") && (
+            <div 
+              className="sending-halted-text" 
+              style={{
+                color: "#ff3b30",
+                fontWeight: "bold",
+                fontSize: "13px",
+                marginBottom: "10px",
+                textAlign: "left",
+                letterSpacing: "0.5px"
+              }}
+            >
+              SENDING HALTED
+            </div>
+          )}
           <div className="widget-content">
             {explanation}
           </div>
@@ -521,6 +700,15 @@ const ComplianceWidget = () => {
                 >
                   {isRewriting ? "Rewriting..." : "Rewrite for Compliance"}
                 </button>
+                {!realTimeAnalysis && (
+                  <button 
+                    className="dismiss-send-button" 
+                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                    onClick={(e) => { e.stopPropagation(); handleDismissAndSend(); }}
+                  >
+                    Dismiss & Send
+                  </button>
+                )}
               </>
             )}
           </div>

@@ -192,11 +192,14 @@
 }
 
 .rewrite-button {
-  align-self: flex-end;
+  align-self: stretch;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: center;
   background-color: #007aff;
   color: white;
   border: none;
-  padding: 8px 16px;
+  padding: 10px 16px;
   border-radius: 8px;
   font-weight: 600;
   font-size: 13px;
@@ -274,4 +277,34 @@
 
 .compliance-widget.theme-light:hover {
     box-shadow: 0 16px 48px rgba(0,0,0,0.2);
+}
+
+.dismiss-send-button {
+  align-self: stretch;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: center;
+  background-color: transparent;
+  border: 1px solid #3a3a3c;
+  color: inherit;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.2s, opacity 0.2s;
+  opacity: 0.8;
+}
+
+.dismiss-send-button:hover {
+  opacity: 1;
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.theme-light .dismiss-send-button {
+  border-color: #c7c7cc;
+}
+
+.theme-light .dismiss-send-button:hover {
+  background-color: rgba(0, 0, 0, 0.05);
 }
