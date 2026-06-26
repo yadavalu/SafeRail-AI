@@ -43,7 +43,9 @@ const MinimizeIcon = () => (
 
 const ComplianceWidget = () => {
   const [theme] = useStorage("theme", "system")
+  const [analysisMode] = useStorage("analysisMode", "onsend")
   const [realTimeAnalysis] = useStorage("realTimeAnalysis", false)
+  const effectiveMode = analysisMode || (realTimeAnalysis ? "realtime" : "onsend")
   const [status, setStatus] = useState<"grey" | "green" | "warn" | "clear_warn" | "error">("grey")
   const [explanation, setExplanation] = useState<string | null>("Ready to check.")
   const [unsafeDomains, setUnsafeDomains] = useState<string[]>([])
@@ -85,6 +87,40 @@ const ComplianceWidget = () => {
 
   const typingTimer = useRef<NodeJS.Timeout | null>(null)
   const lastAnalyzedText = useRef<string>("")
+
+  const getSenderEmail = (): string => {
+    try {
+      const profileLink = document.querySelector('a[href^="https://accounts.google.com/SignOutOptions"]')
+      if (profileLink) {
+        const title = profileLink.getAttribute("title")
+        const match = title?.match(/\(([^)]+)\)/)
+        if (match?.[1]) return match[1].trim()
+      }
+
+      const accountDiv = document.querySelector('div[aria-label^="Google Account:"]')
+      if (accountDiv) {
+        const label = accountDiv.getAttribute("aria-label")
+        const match = label?.match(/\(([^)]+)\)/)
+        if (match?.[1]) return match[1].trim()
+      }
+
+      const gbEl = document.querySelector('.gb_d.gb_Qa.gb_h, .gb_b.gb_da')
+      if (gbEl) {
+        const label = gbEl.getAttribute("aria-label")
+        const match = label?.match(/([^:\s\(\)]+@[^:\s\(\)]+\.[a-zA-Z]+)/)
+        if (match) return match[0].trim()
+      }
+
+      const outlookUser = document.querySelector('#O365_HeaderLeftRegion div[title*="@"]')
+      if (outlookUser) {
+        const title = outlookUser.getAttribute("title")
+        if (title && title.includes("@")) return title.trim()
+      }
+    } catch (e) {
+      console.error("Error extracting sender email:", e)
+    }
+    return "sender@company.com"
+  }
 
   // Determine actual theme
   const [systemTheme, setSystemTheme] = useState<"light" | "dark">("light")
@@ -276,7 +312,7 @@ const ComplianceWidget = () => {
       if (!isTextField(target)) return
       lastElement.current = target
 
-      if (!realTimeAnalysis) {
+      if (effectiveMode !== "realtime") {
         updateStatus("grey")
         setExplanation("Ready to check.")
         return
@@ -294,7 +330,7 @@ const ComplianceWidget = () => {
     }
     document.addEventListener("input", handleInput)
     return () => document.removeEventListener("input", handleInput)
-  }, [unsafeDomains, realTimeAnalysis]) // Re-bind if domains/toggle change
+  }, [unsafeDomains, effectiveMode]) // Re-bind if domains/mode change
 
   useEffect(() => {
     const handleFocusChange = () => {
@@ -304,7 +340,7 @@ const ComplianceWidget = () => {
             lastElement.current = activeEl
             setIsVisible(true)
             
-            if (!realTimeAnalysis) {
+            if (effectiveMode !== "realtime") {
                 updateStatus("grey")
                 setExplanation("Ready to check.")
                 setIsManuallyMinimized(false)
@@ -325,7 +361,7 @@ const ComplianceWidget = () => {
                 if (isMouseOverWidget.current || (widgetRef.current && widgetRef.current.contains(document.activeElement))) return
                 
                 // If real-time is off and we are scanning/loading or displaying a warning/error, do not auto-hide the widget on focus loss
-                if (!realTimeAnalysis && (isLoadingRef.current || ["warn", "clear_warn", "error"].includes(statusRef.current))) {
+                if (effectiveMode !== "realtime" && (isLoadingRef.current || ["warn", "clear_warn", "error"].includes(statusRef.current))) {
                     return
                 }
 
@@ -343,7 +379,7 @@ const ComplianceWidget = () => {
         document.removeEventListener("focusin", handleFocusChange)
         document.removeEventListener("focusout", handleFocusChange)
     }
-  }, [unsafeDomains, realTimeAnalysis])
+  }, [unsafeDomains, effectiveMode])
 
   const findSendButton = (el: HTMLElement | null): HTMLElement | null => {
     let current: HTMLElement | null = el
@@ -377,7 +413,7 @@ const ComplianceWidget = () => {
 
   useEffect(() => {
     const handleSendClick = async (e: MouseEvent) => {
-      if (realTimeAnalysis) return
+      if (effectiveMode === "realtime") return
       if (isProgrammaticSend.current) return
 
       const target = e.target as HTMLElement
@@ -403,6 +439,40 @@ const ComplianceWidget = () => {
       setIsExpanded(true)
 
       const text = getTextFromElement(textElement)
+
+      if (effectiveMode === "aftersend") {
+        updateLoading(true)
+        updateStatus("grey")
+        setExplanation("Checking compliance in background...")
+        
+        const senderEmail = getSenderEmail()
+        
+        const response = await sendToBackground({
+          name: "stack-mail",
+          body: {
+            text,
+            senderEmail,
+            platform: getPlatformContext()
+          }
+        })
+        
+        updateLoading(false)
+        
+        if (response.status === "green") {
+          setIsVisible(false)
+          setIsExpanded(false)
+          isProgrammaticSend.current = true
+          sendBtn.click()
+          isProgrammaticSend.current = false
+        } else {
+          const displayStatus = (response.status === "blocked" || response.status === "error") ? "clear_warn" : "error"
+          updateStatus(displayStatus as any)
+          setExplanation(`BLOCK ALERT: Outgoing email was blocked due to compliance violations. A notification has been sent to ${senderEmail}.\n\nReason: ${response.explanation || "Compliance violation detected."}`)
+        }
+        return
+      }
+
+      // Default Check on Send mode
       const finalStatus = await checkCompliance(text, true)
 
       if (finalStatus === "green") {
@@ -419,11 +489,11 @@ const ComplianceWidget = () => {
 
     document.addEventListener("click", handleSendClick, true)
     return () => document.removeEventListener("click", handleSendClick, true)
-  }, [realTimeAnalysis, unsafeDomains, status])
+  }, [effectiveMode, unsafeDomains, status])
 
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
-      if (realTimeAnalysis) return
+      if (effectiveMode === "realtime") return
       if (isProgrammaticSend.current) return
 
       const isCtrlEnter = (e.ctrlKey || e.metaKey) && e.key === "Enter"
@@ -453,6 +523,40 @@ const ComplianceWidget = () => {
       setIsExpanded(true)
 
       const text = getTextFromElement(target)
+
+      if (effectiveMode === "aftersend") {
+        updateLoading(true)
+        updateStatus("grey")
+        setExplanation("Checking compliance in background...")
+        
+        const senderEmail = getSenderEmail()
+        
+        const response = await sendToBackground({
+          name: "stack-mail",
+          body: {
+            text,
+            senderEmail,
+            platform: getPlatformContext()
+          }
+        })
+        
+        updateLoading(false)
+        
+        if (response.status === "green") {
+          setIsVisible(false)
+          setIsExpanded(false)
+          isProgrammaticSend.current = true
+          sendButton.click()
+          isProgrammaticSend.current = false
+        } else {
+          const displayStatus = (response.status === "blocked" || response.status === "error") ? "clear_warn" : "error"
+          updateStatus(displayStatus as any)
+          setExplanation(`BLOCK ALERT: Outgoing email was blocked due to compliance violations. A notification has been sent to ${senderEmail}.\n\nReason: ${response.explanation || "Compliance violation detected."}`)
+        }
+        return
+      }
+
+      // Default Check on Send mode
       const finalStatus = await checkCompliance(text, true)
 
       if (finalStatus === "green") {
@@ -469,7 +573,7 @@ const ComplianceWidget = () => {
 
     document.addEventListener("keydown", handleKeyDown, true)
     return () => document.removeEventListener("keydown", handleKeyDown, true)
-  }, [realTimeAnalysis, unsafeDomains, status])
+  }, [effectiveMode, unsafeDomains, status])
 
   // Drag & Snap logic
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -667,7 +771,7 @@ const ComplianceWidget = () => {
 
       {isExpanded && (
         <>
-          {!realTimeAnalysis && (status === "warn" || status === "clear_warn") && (
+          {effectiveMode !== "realtime" && (status === "warn" || status === "clear_warn") && (
             <div 
               className="sending-halted-text" 
               style={{
@@ -679,7 +783,7 @@ const ComplianceWidget = () => {
                 letterSpacing: "0.5px"
               }}
             >
-              SENDING HALTED
+              {effectiveMode === "aftersend" ? "SENDING BLOCKED" : "SENDING HALTED"}
             </div>
           )}
           <div className="widget-content">
@@ -700,7 +804,7 @@ const ComplianceWidget = () => {
                 >
                   {isRewriting ? "Rewriting..." : "Rewrite for Compliance"}
                 </button>
-                {!realTimeAnalysis && (
+                {effectiveMode === "onsend" && (
                   <button 
                     className="dismiss-send-button" 
                     onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}

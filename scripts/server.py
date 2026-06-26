@@ -229,8 +229,92 @@ def analyze():
             response.append({"type": r.entity_type, "start": r.start, "end": r.end, "score": r.score})
     return jsonify(response)
 
+@app.route("/send-blocked-email", methods=["POST"])
+def send_blocked_email():
+    data = request.json or {}
+    sender_email = data.get("sender_email", "employee@company.com")
+    original_content = data.get("original_content", "")
+    reason = data.get("reason", "Violation of compliance rules.")
+    
+    subject = "COMPLIANCE ALERT: Outgoing Email Blocked"
+    body = f"""Dear Sender,
+
+Your outgoing email has been blocked because it failed our compliance checks.
+
+Reason for block:
+--------------------------------------------------
+{reason}
+--------------------------------------------------
+
+Original Email Content:
+--------------------------------------------------
+{original_content}
+--------------------------------------------------
+
+This is an automated security notification from SafeRail AI. Please revise your email content to comply with our compliance policies.
+
+Best regards,
+SafeRail AI Compliance Team"""
+
+    # 1. Log the notification
+    logger.warning("Email Blocked. Notification sent to sender.", sender=sender_email, reason=reason)
+    
+    # 2. Save the blocked email to a local file in the workspace for user verification/auditing
+    blocked_dir = os.path.join(os.path.dirname(__file__), "..", "blocked_emails")
+    os.makedirs(blocked_dir, exist_ok=True)
+    filename = f"blocked_{int(time.time())}_{sender_email.replace('@', '_').replace('.', '_')}.txt"
+    filepath = os.path.join(blocked_dir, filename)
+    try:
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(f"To: {sender_email}\n")
+            f.write(f"Subject: {subject}\n")
+            f.write(f"Date: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write("="*50 + "\n")
+            f.write(body)
+        logger.info("Blocked email saved to disk for verification", path=filepath)
+    except Exception as e:
+        logger.error("Failed to save blocked email to disk", error=str(e))
+
+    # 3. Attempt to send real email using SMTP if configured
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_port = os.getenv("SMTP_PORT", "587")
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_pass = os.getenv("SMTP_PASSWORD")
+    
+    sent_via_smtp = False
+    smtp_error = None
+    if smtp_host and smtp_user and smtp_pass:
+        try:
+            import smtplib
+            from email.mime.text import MIMEText
+            
+            msg = MIMEText(body)
+            msg['Subject'] = subject
+            msg['From'] = smtp_user
+            msg['To'] = sender_email
+            
+            server = smtplib.SMTP(smtp_host, int(smtp_port))
+            server.starttls()
+            server.login(smtp_user, smtp_pass)
+            server.sendmail(smtp_user, [sender_email], msg.as_string())
+            server.quit()
+            sent_via_smtp = True
+            logger.info("Notification email sent successfully via SMTP", to=sender_email)
+        except Exception as e:
+            smtp_error = str(e)
+            logger.error("Failed to send email via SMTP", error=smtp_error)
+            
+    return jsonify({
+        "status": "success",
+        "message": "Blocked email handled",
+        "saved_to_disk": filepath,
+        "sent_via_smtp": sent_via_smtp,
+        "smtp_error": smtp_error
+    })
+
 if __name__ == "__main__":
     threading.Thread(target=start_ollama).start()
     from waitress import serve
     logger.info("SafeRail Production Server running", health_check="http://localhost:3000/")
     serve(app, host="0.0.0.0", port=3000)
+

@@ -11,7 +11,7 @@ const DEFAULT_OLLAMA = "http://localhost:11434/api/chat"
 const DEFAULT_PRESIDIO = "http://localhost:3000/analyze"
 
 // --- ANALYTICS ---
-const reportAnalytics = async (type: "scanned" | "warning" | "violation" | "confidential") => {
+export const reportAnalytics = async (type: "scanned" | "warning" | "violation" | "confidential") => {
     try {
         const ref = doc(db, "config", "analytics");
         // Note: updateDoc in Lite works similarly but is more robust for one-offs
@@ -29,7 +29,7 @@ const reportAnalytics = async (type: "scanned" | "warning" | "violation" | "conf
 }
 
 // --- CONFIG FETCHING ---
-const getRules = async () => {
+export const getRules = async () => {
     try {
         const d = await getDoc(doc(db, "config", "settings"));
         if (d.exists() && d.data().compliance_rules) {
@@ -42,7 +42,7 @@ const getRules = async () => {
 }
 
 // --- HELPER: Call Presidio ---
-const checkConfidentiality = async (text: string) => {
+export const checkConfidentiality = async (text: string) => {
   try {
     const endpoint = await storage.get("presidioEndpoint") || DEFAULT_PRESIDIO
     const response = await fetch(endpoint, {

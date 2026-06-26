@@ -9,8 +9,18 @@ function IndexPopup() {
   const [baseHost, setBaseHost] = useStorage("baseHost", "https://llm.safeseal.xyz")
   const [ollamaEndpoint, setOllamaEndpoint] = useStorage("ollamaEndpoint", "https://llm.safeseal.xyz/gemini/chat")
   const [presidioEndpoint, setPresidioEndpoint] = useStorage("presidioEndpoint", "https://llm.safeseal.xyz/analyze")
+  const [analysisMode, setAnalysisMode] = useStorage("analysisMode", "onsend")
   const [realTimeAnalysis, setRealTimeAnalysis] = useStorage("realTimeAnalysis", false)
   const [showAdvanced, setShowAdvanced] = useState(false)
+
+  // Sync analysisMode with realTimeAnalysis for backwards compatibility
+  useEffect(() => {
+    if (analysisMode === "realtime" && !realTimeAnalysis) {
+      setRealTimeAnalysis(true)
+    } else if (analysisMode !== "realtime" && realTimeAnalysis && analysisMode !== undefined) {
+      setRealTimeAnalysis(false)
+    }
+  }, [analysisMode, realTimeAnalysis])
 
   // Determine actual theme
   const [systemTheme, setSystemTheme] = useState<"light" | "dark">("light")
@@ -91,45 +101,51 @@ function IndexPopup() {
           </div>
         </div>
 
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'space-between', 
-          marginBottom: 20, 
-          padding: '12px 16px', 
-          backgroundColor: appliedTheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)', 
-          borderRadius: 8, 
-          border: `1px solid ${appliedTheme === 'dark' ? 'var(--color-border-dark)' : 'var(--color-border-light)'}` 
-        }}>
-          <div>
-            <div style={{ fontWeight: 600, fontSize: 13 }}>Real-Time Analysis</div>
-            <div style={{ fontSize: 11, opacity: 0.6, marginTop: 2 }}>
-              {realTimeAnalysis ? "Scanning email text in real-time as you type" : "Scanning text only when clicking Send button"}
-            </div>
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ display: "block", marginBottom: 8, fontWeight: 600, fontSize: 13, opacity: 0.8 }}>
+            Analysis Mode
+          </label>
+          <div style={{ 
+            display: 'flex', 
+            backgroundColor: appliedTheme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)', 
+            borderRadius: 8, 
+            padding: 2,
+            border: `1px solid ${appliedTheme === 'dark' ? 'var(--color-border-dark)' : 'var(--color-border-light)'}`
+          }}>
+            {[
+              { id: "realtime", label: "Real-Time" },
+              { id: "onsend", label: "On Send" },
+              { id: "aftersend", label: "After Send" }
+            ].map(mode => (
+              <button
+                key={mode.id}
+                onClick={() => setAnalysisMode(mode.id)}
+                style={{
+                  flex: 1,
+                  padding: '8px 4px',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  borderRadius: 6,
+                  border: 'none',
+                  backgroundColor: (analysisMode || "onsend") === mode.id 
+                    ? (appliedTheme === 'dark' ? '#ffffff' : 'var(--color-bg-dark)') 
+                    : 'transparent',
+                  color: (analysisMode || "onsend") === mode.id 
+                    ? (appliedTheme === 'dark' ? '#000000' : '#ffffff') 
+                    : 'inherit',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: (analysisMode || "onsend") === mode.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                }}
+              >
+                {mode.label}
+              </button>
+            ))}
           </div>
-          <div 
-            onClick={() => setRealTimeAnalysis(!realTimeAnalysis)}
-            style={{
-              width: 44,
-              height: 24,
-              backgroundColor: realTimeAnalysis ? 'var(--color-success)' : (appliedTheme === 'dark' ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)'),
-              borderRadius: 12,
-              position: 'relative',
-              cursor: 'pointer',
-              transition: 'background-color 0.2s'
-            }}
-          >
-            <div style={{
-              width: 20,
-              height: 20,
-              backgroundColor: '#fff',
-              borderRadius: '50%',
-              position: 'absolute',
-              top: 2,
-              left: realTimeAnalysis ? 22 : 2,
-              transition: 'left 0.2s',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-            }} />
+          <div style={{ fontSize: 11, opacity: 0.6, marginTop: 8, minHeight: 32, lineHeight: 1.4 }}>
+            {(analysisMode || "onsend") === "realtime" && "Scanning email text in real-time as you type."}
+            {(analysisMode || "onsend") === "onsend" && "Intercepts Send. Halts & displays issues in UI with override option."}
+            {(analysisMode || "onsend") === "aftersend" && "Intercepts Send. Stacks in background; blocks and emails sender on violation."}
           </div>
         </div>
 
