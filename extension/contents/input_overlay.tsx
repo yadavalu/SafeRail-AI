@@ -295,7 +295,7 @@ const ComplianceWidget = () => {
 
     const response = await sendToBackground({
       name: "check-text",
-      body: { text, platform }
+      body: { text, platform, senderEmail: getSenderEmail() }
     })
 
     updateLoading(false)
@@ -491,6 +491,12 @@ const ComplianceWidget = () => {
       e.stopImmediatePropagation()
 
       sendButtonRef.current = sendBtn
+
+      // Clear visual pressed/focused states on the Send button
+      sendBtn.blur()
+      sendBtn.classList.remove("T-I-JW", "T-I-KO")
+      sendBtn.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }))
+      sendBtn.dispatchEvent(new MouseEvent("mouseleave", { bubbles: true }))
 
       const textElement = lastElement.current || (document.activeElement as HTMLElement)
       if (!textElement || !isTextField(textElement)) {

@@ -12,11 +12,11 @@ const DEFAULT_PRESIDIO = "http://localhost:3000/analyze"
 
 // --- ANALYTICS ---
 // --- ANALYTICS ---
-export const reportAnalytics = async (type: "scanned" | "warning" | "violation" | "confidential", rule?: string) => {
+export const reportAnalytics = async (type: "scanned" | "warning" | "violation" | "confidential", rule?: string, email?: string) => {
     try {
         const ref = doc(db, "config", "analytics");
         const docSnap = await getDoc(ref);
-        let data: any = { scanned: 0, warning: 0, violation: 0, confidential: 0, rule_triggers: {} };
+        let data: any = { scanned: 0, warning: 0, violation: 0, confidential: 0, rule_triggers: {}, recent_incidents: [] };
         if (docSnap.exists()) {
             data = docSnap.data();
         }
@@ -28,6 +28,24 @@ export const reportAnalytics = async (type: "scanned" | "warning" | "violation" 
             if (cleanRule) {
                 if (!data.rule_triggers) data.rule_triggers = {};
                 data.rule_triggers[cleanRule] = (data.rule_triggers[cleanRule] || 0) + 1;
+            }
+        }
+
+        if (type === "warning" || type === "violation") {
+            const newIncident = {
+                id: Math.random().toString(36).substring(2, 9),
+                email: email || "sender@company.com",
+                rule: rule || "Compliance policy trigger",
+                severity: type === "violation" ? "violation" : "warning",
+                date: new Date().toISOString()
+            };
+            
+            if (!data.recent_incidents) {
+                data.recent_incidents = [];
+            }
+            data.recent_incidents.unshift(newIncident);
+            if (data.recent_incidents.length > 10) {
+                data.recent_incidents = data.recent_incidents.slice(0, 10);
             }
         }
         
@@ -113,7 +131,7 @@ export const checkConfidentiality = async (text: string) => {
 }
 
 const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
-  const { text, platform } = req.body
+  const { text, platform, senderEmail } = req.body
 
   if (!text || text.length < 2) {
     res.send({ status: "grey", explanation: "", confidential: false })
@@ -128,7 +146,7 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
     if (piiResults.length > 0) {
       const foundTypes = [...new Set(piiResults.map((r: any) => r.type))].join(", ")
       const piiRule = await matchRule("No disguised personal data leakages, explicit and inexplicit.");
-      await reportAnalytics("confidential", piiRule || undefined);
+      await reportAnalytics("violation", piiRule || undefined, senderEmail);
       res.send({
         status: "clear_warn",
         confidential: true,
@@ -213,8 +231,8 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
       matchedRule = await matchRule(result.rule_violated);
     }
 
-    if (result.status === "clear_warn") await reportAnalytics("violation", matchedRule || undefined);
-    if (result.status === "warn") await reportAnalytics("warning", matchedRule || undefined);
+    if (result.status === "clear_warn") await reportAnalytics("violation", matchedRule || undefined, senderEmail);
+    if (result.status === "warn") await reportAnalytics("warning", matchedRule || undefined, senderEmail);
     if (result.explanation == "") result.explanation = " ";
 
     res.send({

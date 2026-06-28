@@ -55,7 +55,7 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
       if (piiResults.length > 0) {
         const foundTypes = [...new Set(piiResults.map((r: any) => r.type))].join(", ")
         const piiRule = await matchRule("No disguised personal data leakages, explicit and inexplicit.");
-        await reportAnalytics("confidential", piiRule || undefined)
+        await reportAnalytics("violation", piiRule || undefined, senderEmail)
         finalStatus = "clear_warn"
         isConfidential = true
         finalExplanation = `Sensitive data detected: ${foundTypes}. \n\nThis violates confidentiality protocols.`
@@ -117,8 +117,8 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
         matchedRule = await matchRule(result.rule_violated);
       }
 
-      if (finalStatus === "clear_warn") await reportAnalytics("violation", matchedRule || undefined)
-      if (finalStatus === "warn") await reportAnalytics("warning", matchedRule || undefined)
+      if (finalStatus === "clear_warn") await reportAnalytics("violation", matchedRule || undefined, senderEmail)
+      if (finalStatus === "warn") await reportAnalytics("warning", matchedRule || undefined, senderEmail)
     }
 
     // 4. PROCESS EVALUATION RESULT

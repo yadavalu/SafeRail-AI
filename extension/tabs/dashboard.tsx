@@ -41,6 +41,7 @@ export default function Dashboard() {
   const [user, setUser] = useState(null)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [expandedIncidentId, setExpandedIncidentId] = useState<string | null>(null)
 
   const [unsafeDomains, setUnsafeDomains] = useState("")
   const [complianceRules, setComplianceRules] = useState("")
@@ -129,7 +130,8 @@ export default function Dashboard() {
 
   const PII_TYPES = [
     "PERSON", "EMAIL_ADDRESS", "PHONE_NUMBER", "LOCATION",
-    "IP_ADDRESS", "CREDIT_CARD", "CRYPTO", "US_SSN", "IBAN_CODE"
+    "IP_ADDRESS", "CREDIT_CARD", "CRYPTO", "US_SSN", "IBAN_CODE",
+    "DATE_TIME", "NAME"
   ]
 
   const configuredRules = complianceRules
@@ -158,6 +160,7 @@ export default function Dashboard() {
   const recentIncidents = (analytics.recent_incidents || analytics.recentIncidents || analytics.recent_activity || analytics.incidents || fallbackIncidents)
     .slice()
     .sort((a, b) => Number(toDate(b.date || b.createdAt || b.timestamp)) - Number(toDate(a.date || a.createdAt || a.timestamp)))
+    .slice(0, 10)
 
   const safeRailPrevented = analytics.prevented ?? analytics.corrected ?? analytics.rewritten ?? analytics.confidential ?? 0
 
@@ -202,7 +205,7 @@ export default function Dashboard() {
               filter: appliedTheme === "dark" ? "invert(1)" : "none"
             }}
           />
-          <h1 style={{ marginBottom: 30, fontSize: 24, fontWeight: 800 }}>Admin Login</h1>
+          <h1 style={{ marginBottom: 30, fontSize: 24, fontWeight: 800, color: appliedTheme === "light" ? "#000000" : "#ffffff" }}>Admin Login</h1>
           <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <input
               type="email"
@@ -303,16 +306,66 @@ export default function Dashboard() {
                 const isViolation = String(incident.severity || incident.type || "").toLowerCase().includes("violation")
                 const severityColor = isViolation ? "#ff453a" : "#ff9f0a"
                 const severityLabel = isViolation ? "Violation" : "Warning"
+                const isExpanded = expandedIncidentId === (incident.id || String(index))
                 return (
-                  <div key={incident.id || index} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 14, alignItems: "center", padding: "12px 0", borderBottom: index === recentIncidents.length - 1 ? "none" : "1px solid var(--color-border-dark)" }}>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
-                        <strong style={{ fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{incident.user || incident.email || "Unknown user"}</strong>
-                        <span style={{ background: `${severityColor}22`, color: severityColor, border: `1px solid ${severityColor}55`, padding: "3px 8px", borderRadius: 999, fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.4px" }}>{severityLabel}</span>
+                  <div key={incident.id || index} style={{ borderBottom: index === recentIncidents.length - 1 ? "none" : "1px solid var(--color-border-dark)", paddingBottom: 4 }}>
+                    <div 
+                      onClick={() => setExpandedIncidentId(prev => prev === (incident.id || String(index)) ? null : (incident.id || String(index)))}
+                      style={{ 
+                        display: "grid", 
+                        gridTemplateColumns: "1fr auto", 
+                        gap: 14, 
+                        alignItems: "center", 
+                        padding: "12px 10px", 
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                        transition: "background-color 0.2s"
+                      }}
+                      className="incident-row"
+                    >
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+                          <strong style={{ fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{incident.user || incident.email || "Unknown user"}</strong>
+                          <span style={{ background: `${severityColor}22`, color: severityColor, border: `1px solid ${severityColor}55`, padding: "3px 8px", borderRadius: 999, fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.4px" }}>{severityLabel}</span>
+                        </div>
+                        <p style={{ margin: 0, opacity: 0.66, fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {isExpanded ? "Click to collapse" : (incident.rule || incident.ruleType || "Compliance rule")}
+                        </p>
                       </div>
-                      <p style={{ margin: 0, opacity: 0.66, fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{incident.rule || incident.ruleType || "Compliance rule"}</p>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ opacity: 0.62, fontSize: 12 }}>{formatIncidentDate(incident.date || incident.createdAt || incident.timestamp)}</span>
+                        <span style={{ 
+                          fontSize: 10, 
+                          opacity: 0.5, 
+                          transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
+                          transition: "transform 0.2s",
+                          display: "inline-block"
+                        }}>▶</span>
+                      </div>
                     </div>
-                    <span style={{ opacity: 0.62, fontSize: 12 }}>{formatIncidentDate(incident.date || incident.createdAt || incident.timestamp)}</span>
+                    
+                    {/* Collapsible Detail Panel */}
+                    <div style={{
+                      maxHeight: isExpanded ? "250px" : "0px",
+                      overflow: "hidden",
+                      transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                      opacity: isExpanded ? 1 : 0,
+                      padding: isExpanded ? "12px 16px" : "0px 16px",
+                      backgroundColor: appliedTheme === 'light' ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.02)',
+                      borderRadius: "6px",
+                      marginTop: isExpanded ? "4px" : "0px",
+                      border: isExpanded ? (appliedTheme === 'light' ? '1px solid var(--color-border-light)' : '1px solid var(--color-border-dark)') : 'none',
+                      boxShadow: isExpanded ? "inset 0 2px 4px rgba(0,0,0,0.15)" : "none"
+                    }}>
+                      <div style={{ fontSize: 11, opacity: 0.5, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6, fontWeight: 700 }}>Triggered Rule</div>
+                      <div style={{ fontSize: 13, lineHeight: 1.5, fontWeight: 600, color: "var(--color-accent)", wordBreak: "break-word" }}>
+                        {incident.rule || incident.ruleType || "Unknown compliance rule"}
+                      </div>
+                      <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 16, fontSize: 11, opacity: 0.6 }}>
+                        <div><strong>Incident ID:</strong> {incident.id || "N/A"}</div>
+                        <div><strong>Triggered At:</strong> {formatIncidentDate(incident.date || incident.createdAt || incident.timestamp)}</div>
+                      </div>
+                    </div>
                   </div>
                 )
               }) : (
@@ -395,6 +448,12 @@ export default function Dashboard() {
         }
         .theme-light [style*="var(--color-bg-dark)"] {
           background-color: var(--color-bg-light) !important;
+        }
+        .incident-row:hover {
+          background-color: rgba(255, 255, 255, 0.05);
+        }
+        .theme-light .incident-row:hover {
+          background-color: rgba(0, 0, 0, 0.04);
         }
       `}</style>
     </div>

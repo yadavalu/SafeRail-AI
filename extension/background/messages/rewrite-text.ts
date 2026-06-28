@@ -1,5 +1,6 @@
 import type { PlasmoMessaging } from "@plasmohq/messaging"
 import { Storage } from "@plasmohq/storage"
+import { reportAnalytics } from "./check-text"
 
 const storage = new Storage()
 const MODEL_NAME = "saferail-llama"
@@ -47,6 +48,8 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
     }
 
     const rewrittenText = data.message.content.trim()
+
+    await reportAnalytics("confidential")
 
     res.send({
       rewrittenText: rewrittenText
