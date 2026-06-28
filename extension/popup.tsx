@@ -120,6 +120,7 @@ function IndexPopup() {
               <button
                 key={mode.id}
                 onClick={() => setAnalysisMode(mode.id)}
+                disabled={mode.id === "aftersend"}
                 style={{
                   flex: 1,
                   padding: '8px 4px',
@@ -133,7 +134,8 @@ function IndexPopup() {
                   color: (analysisMode || "onsend") === mode.id 
                     ? (appliedTheme === 'dark' ? '#000000' : '#ffffff') 
                     : 'inherit',
-                  cursor: 'pointer',
+                  cursor: mode.id === "aftersend" ? 'not-allowed' : 'pointer',
+                  opacity: mode.id === "aftersend" ? 0.5 : 1,
                   transition: 'all 0.2s ease',
                   boxShadow: (analysisMode || "onsend") === mode.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
                 }}
