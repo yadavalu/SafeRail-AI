@@ -11,18 +11,27 @@ const DEFAULT_OLLAMA = "http://localhost:11434/api/chat"
 const DEFAULT_PRESIDIO = "http://localhost:3000/analyze"
 
 // --- ANALYTICS ---
-export const reportAnalytics = async (type: "scanned" | "warning" | "violation" | "confidential") => {
+// --- ANALYTICS ---
+export const reportAnalytics = async (type: "scanned" | "warning" | "violation" | "confidential", rule?: string) => {
     try {
         const ref = doc(db, "config", "analytics");
-        // Note: updateDoc in Lite works similarly but is more robust for one-offs
-        await updateDoc(ref, {
-            [type]: increment(1)
-        }).catch(async (err) => {
-            if (err.code === "not-found" || err.message?.includes("no entity")) {
-                await setDoc(ref, { scanned: 0, warning: 0, violation: 0, confidential: 0 }, { merge: true });
-                await updateDoc(ref, { [type]: increment(1) });
+        const docSnap = await getDoc(ref);
+        let data: any = { scanned: 0, warning: 0, violation: 0, confidential: 0, rule_triggers: {} };
+        if (docSnap.exists()) {
+            data = docSnap.data();
+        }
+        
+        data[type] = (data[type] || 0) + 1;
+        
+        if (rule) {
+            const cleanRule = rule.trim();
+            if (cleanRule) {
+                if (!data.rule_triggers) data.rule_triggers = {};
+                data.rule_triggers[cleanRule] = (data.rule_triggers[cleanRule] || 0) + 1;
             }
-        });
+        }
+        
+        await setDoc(ref, data, { merge: true });
     } catch (e) {
         console.error("Analytics Error:", e);
     }
@@ -39,6 +48,36 @@ export const getRules = async () => {
         console.error("Rules Fetch Error:", e);
     }
     return localComplianceRules;
+}
+
+export const matchRule = async (ruleViolated: string | null | undefined): Promise<string | null> => {
+  if (!ruleViolated) return null;
+  try {
+    const rulesText = await getRules();
+    const configuredRules = rulesText
+      .split("\n")
+      .map((r: string) => r.replace(/^\s*\d+[.)-]?\s*/, "").trim())
+      .filter(Boolean);
+
+    const llmRule = ruleViolated.trim().replace(/^\s*\d+[.)-]?\s*/, "");
+    
+    // 1. Try exact match (case-insensitive)
+    let matched = configuredRules.find((r: string) => r.toLowerCase() === llmRule.toLowerCase());
+    if (matched) return matched;
+
+    // 2. Try substring match (case-insensitive)
+    matched = configuredRules.find((r: string) => 
+      r.toLowerCase().includes(llmRule.toLowerCase()) || 
+      llmRule.toLowerCase().includes(r.toLowerCase())
+    );
+    if (matched) return matched;
+
+    // 3. Fallback to the llmRule itself
+    return llmRule;
+  } catch (e) {
+    console.error("Error matching rule:", e);
+    return ruleViolated;
+  }
 }
 
 // --- HELPER: Call Presidio ---
@@ -88,7 +127,8 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
     const piiResults = await checkConfidentiality(text)
     if (piiResults.length > 0) {
       const foundTypes = [...new Set(piiResults.map((r: any) => r.type))].join(", ")
-      await reportAnalytics("confidential");
+      const piiRule = await matchRule("No disguised personal data leakages, explicit and inexplicit.");
+      await reportAnalytics("confidential", piiRule || undefined);
       res.send({
         status: "clear_warn",
         confidential: true,
@@ -114,7 +154,7 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
         format: modelType === "llama" ? "json" : undefined,
         stream: false,
         messages: [
-          { role: "user", content: `EVALUATE: ${text}` }
+          { role: "user", content: `EVALUATE: ${text}\n\nNote: If status is 'warn' or 'clear_warn', please specify the exact rule text that was violated in a "rule_violated" key in the JSON response.` }
         ],
       })
     }).catch(e => {
@@ -168,13 +208,19 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
     console.log("Parsed LLM Result:", result);
 
 
-    if (result.status === "clear_warn") await reportAnalytics("violation");
-    if (result.status === "warn") await reportAnalytics("warning");
+    let matchedRule = null;
+    if (result.status === "clear_warn" || result.status === "warn") {
+      matchedRule = await matchRule(result.rule_violated);
+    }
+
+    if (result.status === "clear_warn") await reportAnalytics("violation", matchedRule || undefined);
+    if (result.status === "warn") await reportAnalytics("warning", matchedRule || undefined);
     if (result.explanation == "") result.explanation = " ";
 
     res.send({
       status: result.status || "grey",
       explanation: result.explanation || "Error parsing response.",
+      highlight: result.highlight || null,
       confidential: false
     })
 

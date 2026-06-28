@@ -1,6 +1,6 @@
 import type { PlasmoMessaging } from "@plasmohq/messaging"
 import { Storage } from "@plasmohq/storage"
-import { checkConfidentiality, reportAnalytics } from "./check-text"
+import { checkConfidentiality, reportAnalytics, matchRule } from "./check-text"
 
 const storage = new Storage()
 const MODEL_NAME = "saferail-llama"
@@ -46,6 +46,7 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
   let finalStatus: "green" | "warn" | "clear_warn" | "error" | "grey" = "green"
   let finalExplanation = ""
   let isConfidential = false
+  let highlight: string | null = null
 
   try {
     // 2. RUN PRESIDIO CHECK
@@ -53,7 +54,8 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
       const piiResults = await checkConfidentiality(text)
       if (piiResults.length > 0) {
         const foundTypes = [...new Set(piiResults.map((r: any) => r.type))].join(", ")
-        await reportAnalytics("confidential")
+        const piiRule = await matchRule("No disguised personal data leakages, explicit and inexplicit.");
+        await reportAnalytics("confidential", piiRule || undefined)
         finalStatus = "clear_warn"
         isConfidential = true
         finalExplanation = `Sensitive data detected: ${foundTypes}. \n\nThis violates confidentiality protocols.`
@@ -77,7 +79,7 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
           format: modelType === "llama" ? "json" : undefined,
           stream: false,
           messages: [
-            { role: "user", content: `EVALUATE: ${text}` }
+            { role: "user", content: `EVALUATE: ${text}\n\nNote: If status is 'warn' or 'clear_warn', please specify the exact rule text that was violated in a "rule_violated" key in the JSON response.` }
           ],
         })
       }).catch(e => {
@@ -108,9 +110,15 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
 
       finalStatus = result.status || "grey"
       finalExplanation = result.explanation || ""
+      highlight = result.highlight || null
       
-      if (finalStatus === "clear_warn") await reportAnalytics("violation")
-      if (finalStatus === "warn") await reportAnalytics("warning")
+      let matchedRule = null;
+      if (finalStatus === "clear_warn" || finalStatus === "warn") {
+        matchedRule = await matchRule(result.rule_violated);
+      }
+
+      if (finalStatus === "clear_warn") await reportAnalytics("violation", matchedRule || undefined)
+      if (finalStatus === "warn") await reportAnalytics("warning", matchedRule || undefined)
     }
 
     // 4. PROCESS EVALUATION RESULT
@@ -149,7 +157,7 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
         console.error("Failed to notify backend of blocked email:", notifyErr)
       }
 
-      res.send({ status: "blocked", explanation: finalExplanation })
+      res.send({ status: "blocked", explanation: finalExplanation, highlight })
     } else {
       // Compliance passed!
       console.log(`Mail ${mailId} passed compliance checks.`)
@@ -162,7 +170,7 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
         await storage.set("stackedMails", currentQueue)
       }
 
-      res.send({ status: "green" })
+      res.send({ status: "green", highlight: null })
     }
 
   } catch (error) {
@@ -178,7 +186,7 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
       await storage.set("stackedMails", currentQueue)
     }
 
-    res.send({ status: "error", explanation: `ERROR: ${msg}` })
+    res.send({ status: "error", explanation: `ERROR: ${msg}`, highlight: null })
   }
 }
 

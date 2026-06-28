@@ -65,6 +65,7 @@ const ComplianceWidget = () => {
   const widgetRef = useRef<HTMLDivElement>(null)
   const isMouseOverWidget = useRef(false)
   const isRewritingRef = useRef(false)
+  const isProgrammaticUpdateRef = useRef(false)
 
   const statusRef = useRef<"grey" | "green" | "warn" | "clear_warn" | "error">("grey")
   const isLoadingRef = useRef(false)
@@ -216,7 +217,50 @@ const ComplianceWidget = () => {
       element.innerText = text
     }
     // Dispatch input event so site knows it changed
+    isProgrammaticUpdateRef.current = true
     element.dispatchEvent(new Event("input", { bubbles: true }))
+    isProgrammaticUpdateRef.current = false
+  }
+
+  const underlineText = (element: HTMLElement, textToHighlight: string, status: "warn" | "clear_warn" | "error") => {
+    if (!textToHighlight || !textToHighlight.trim() || !element) return
+    if (element.tagName === "INPUT" || element.tagName === "TEXTAREA") return
+
+    const color = status === "clear_warn" ? "#ff3b30" : "#ff9500"
+    const styleString = `text-decoration: underline wavy ${color}; text-decoration-skip-ink: none;`
+
+    const html = element.innerHTML
+    if (html.includes(styleString)) return
+
+    const escaped = textToHighlight.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')
+    const regex = new RegExp(`(${escaped})`, 'gi')
+
+    let replaced = false
+    const newHTML = html.replace(regex, (match) => {
+      replaced = true
+      return `<span class="saferail-highlight" style="${styleString}">${match}</span>`
+    })
+
+    if (replaced) {
+      element.innerHTML = newHTML
+      isProgrammaticUpdateRef.current = true
+      element.dispatchEvent(new Event("input", { bubbles: true }))
+      isProgrammaticUpdateRef.current = false
+    }
+  }
+
+  const clearUnderlines = (element: HTMLElement) => {
+    if (!element || element.tagName === "INPUT" || element.tagName === "TEXTAREA") return
+
+    const html = element.innerHTML
+    if (!html.includes("saferail-highlight")) return
+
+    const cleanHTML = html.replace(/<span[^>]*class="saferail-highlight"[^>]*>([\s\S]*?)<\/span>/gi, '$1')
+
+    element.innerHTML = cleanHTML
+    isProgrammaticUpdateRef.current = true
+    element.dispatchEvent(new Event("input", { bubbles: true }))
+    isProgrammaticUpdateRef.current = false
   }
 
   const checkCompliance = async (text: string, force = false): Promise<"grey" | "green" | "warn" | "clear_warn" | "error"> => {
@@ -238,6 +282,11 @@ const ComplianceWidget = () => {
     } 
 
     if (!force && text.trim() === lastAnalyzedText.current.trim() && !unsafeMatch) return statusRef.current
+
+    const editor = lastElement.current || (document.activeElement as HTMLElement)
+    if (editor) {
+      clearUnderlines(editor)
+    }
 
     updateLoading(true)
     setIsManuallyMinimized(false) // Reset on new check
@@ -267,6 +316,11 @@ const ComplianceWidget = () => {
 
     updateStatus(finalStatus)
     setExplanation(finalExplanation)
+    
+    if (editor && (finalStatus === "warn" || finalStatus === "clear_warn") && response.highlight) {
+      underlineText(editor, response.highlight, finalStatus)
+    }
+
     lastAnalyzedText.current = text
     return finalStatus
   }
@@ -307,7 +361,7 @@ const ComplianceWidget = () => {
 
   useEffect(() => {
     const handleInput = (e: Event) => {
-      if (isRewritingRef.current) return // Skip checking during rewrite
+      if (isProgrammaticUpdateRef.current || isRewritingRef.current) return // Skip checking during programmatic changes
       const target = e.target as HTMLElement
       if (!isTextField(target)) return
       lastElement.current = target
@@ -402,6 +456,10 @@ const ComplianceWidget = () => {
   }
 
   const handleDismissAndSend = () => {
+    const textElement = lastElement.current || (document.activeElement as HTMLElement)
+    if (textElement) {
+      clearUnderlines(textElement)
+    }
     if (sendButtonRef.current) {
       isProgrammaticSend.current = true
       sendButtonRef.current.click()
@@ -413,12 +471,19 @@ const ComplianceWidget = () => {
 
   useEffect(() => {
     const handleSendClick = async (e: MouseEvent) => {
-      if (effectiveMode === "realtime") return
       if (isProgrammaticSend.current) return
 
       const target = e.target as HTMLElement
       const sendBtn = findSendButton(target)
       if (!sendBtn) return
+
+      if (effectiveMode === "realtime") {
+        const textElement = lastElement.current || (document.activeElement as HTMLElement)
+        if (textElement) {
+          clearUnderlines(textElement)
+        }
+        return
+      }
 
       // Intercept Send button click!
       e.preventDefault()
@@ -441,6 +506,7 @@ const ComplianceWidget = () => {
       const text = getTextFromElement(textElement)
 
       if (effectiveMode === "aftersend") {
+        clearUnderlines(textElement)
         updateLoading(true)
         updateStatus("grey")
         setExplanation("Checking compliance in background...")
@@ -468,6 +534,9 @@ const ComplianceWidget = () => {
           const displayStatus = (response.status === "blocked" || response.status === "error") ? "clear_warn" : "error"
           updateStatus(displayStatus as any)
           setExplanation(`BLOCK ALERT: Outgoing email was blocked due to compliance violations. A notification has been sent to ${senderEmail}.\n\nReason: ${response.explanation || "Compliance violation detected."}`)
+          if (response.highlight) {
+            underlineText(textElement, response.highlight, displayStatus as any)
+          }
         }
         return
       }
@@ -493,7 +562,6 @@ const ComplianceWidget = () => {
 
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
-      if (effectiveMode === "realtime") return
       if (isProgrammaticSend.current) return
 
       const isCtrlEnter = (e.ctrlKey || e.metaKey) && e.key === "Enter"
@@ -501,6 +569,11 @@ const ComplianceWidget = () => {
 
       const target = e.target as HTMLElement
       if (!isTextField(target)) return
+
+      if (effectiveMode === "realtime") {
+        clearUnderlines(target)
+        return
+      }
 
       // Intercept Ctrl+Enter send!
       e.preventDefault()
@@ -525,6 +598,7 @@ const ComplianceWidget = () => {
       const text = getTextFromElement(target)
 
       if (effectiveMode === "aftersend") {
+        clearUnderlines(target)
         updateLoading(true)
         updateStatus("grey")
         setExplanation("Checking compliance in background...")
@@ -552,6 +626,9 @@ const ComplianceWidget = () => {
           const displayStatus = (response.status === "blocked" || response.status === "error") ? "clear_warn" : "error"
           updateStatus(displayStatus as any)
           setExplanation(`BLOCK ALERT: Outgoing email was blocked due to compliance violations. A notification has been sent to ${senderEmail}.\n\nReason: ${response.explanation || "Compliance violation detected."}`)
+          if (response.highlight) {
+            underlineText(target, response.highlight, displayStatus as any)
+          }
         }
         return
       }
