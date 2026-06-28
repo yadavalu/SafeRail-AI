@@ -62,7 +62,7 @@ function IndexPopup() {
   const appliedTheme = theme === "system" ? systemTheme : theme
 
   return (
-    <div className={`theme-${appliedTheme}`} style={{ padding: 20, minWidth: 340, backgroundColor: 'var(--color-bg-dark)', color: 'var(--color-text-dark)', height: '100%', borderRadius: 16, overflow: 'hidden' }}>
+    <div className={`theme-${appliedTheme}`} style={{ padding: 20, minWidth: 340, backgroundColor: 'var(--color-bg-dark)', color: 'var(--color-text-dark)', height: '100%', overflow: 'hidden' }}>
       <div className="card" style={{ border: 'none', boxShadow: 'none', backgroundColor: 'transparent', padding: 0 }}>
         <img 
           src={bannerImg} 
