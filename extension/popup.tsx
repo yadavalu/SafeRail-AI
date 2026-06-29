@@ -6,9 +6,9 @@ import bannerImg from "data-base64:./assets/banner_transparent.png"
 function IndexPopup() {
   const [theme, setTheme] = useStorage("theme", "system")
   const [modelType, setModelType] = useStorage("modelType", "gemini")
-  const [baseHost, setBaseHost] = useStorage("baseHost", "https://llm.safeseal.xyz")
-  const [ollamaEndpoint, setOllamaEndpoint] = useStorage("ollamaEndpoint", "https://llm.safeseal.xyz/gemini/chat")
-  const [presidioEndpoint, setPresidioEndpoint] = useStorage("presidioEndpoint", "https://llm.safeseal.xyz/analyze")
+  const [baseHost, setBaseHost] = useStorage("baseHost", "http://llm.safeseal.xyz")
+  const [ollamaEndpoint, setOllamaEndpoint] = useStorage("ollamaEndpoint", "http://llm.safeseal.xyz/gemini/chat")
+  const [presidioEndpoint, setPresidioEndpoint] = useStorage("presidioEndpoint", "http://llm.safeseal.xyz/analyze")
   const [analysisMode, setAnalysisMode] = useStorage("analysisMode", "onsend")
   const [realTimeAnalysis, setRealTimeAnalysis] = useStorage("realTimeAnalysis", false)
   const [showAdvanced, setShowAdvanced] = useState(false)
@@ -64,20 +64,20 @@ function IndexPopup() {
   return (
     <div className={`theme-${appliedTheme}`} style={{ padding: 20, minWidth: 340, backgroundColor: 'var(--color-bg-dark)', color: 'var(--color-text-dark)', height: '100%', overflow: 'hidden' }}>
       <div className="card" style={{ border: 'none', boxShadow: 'none', backgroundColor: 'transparent', padding: 0 }}>
-        <img 
-          src={bannerImg} 
-          style={{ 
-            width: '100%', 
+        <img
+          src={bannerImg}
+          style={{
+            width: '100%',
             marginBottom: 24,
             filter: appliedTheme === "dark" ? "invert(1)" : "none"
-          }} 
+          }}
         />
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
           <div>
             <label style={{ display: "block", marginBottom: 8, fontWeight: 600, fontSize: 13, opacity: 0.8 }}>Theme</label>
-            <select 
-              value={theme} 
+            <select
+              value={theme}
               onChange={(e) => setTheme(e.target.value)}
               className="input-field"
               style={{ cursor: 'pointer', fontSize: 12 }}
@@ -89,8 +89,8 @@ function IndexPopup() {
           </div>
           <div>
             <label style={{ display: "block", marginBottom: 8, fontWeight: 600, fontSize: 13, opacity: 0.8 }}>Model</label>
-            <select 
-              value={modelType} 
+            <select
+              value={modelType}
               onChange={(e) => handleModelChange(e.target.value)}
               className="input-field"
               style={{ cursor: 'pointer', fontSize: 12 }}
@@ -105,10 +105,10 @@ function IndexPopup() {
           <label style={{ display: "block", marginBottom: 8, fontWeight: 600, fontSize: 13, opacity: 0.8 }}>
             Analysis Mode
           </label>
-          <div style={{ 
-            display: 'flex', 
-            backgroundColor: appliedTheme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)', 
-            borderRadius: 8, 
+          <div style={{
+            display: 'flex',
+            backgroundColor: appliedTheme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
+            borderRadius: 8,
             padding: 2,
             border: `1px solid ${appliedTheme === 'dark' ? 'var(--color-border-dark)' : 'var(--color-border-light)'}`
           }}>
@@ -128,11 +128,11 @@ function IndexPopup() {
                   fontWeight: 600,
                   borderRadius: 6,
                   border: 'none',
-                  backgroundColor: (analysisMode || "onsend") === mode.id 
-                    ? (appliedTheme === 'dark' ? '#ffffff' : 'var(--color-bg-dark)') 
+                  backgroundColor: (analysisMode || "onsend") === mode.id
+                    ? (appliedTheme === 'dark' ? '#ffffff' : 'var(--color-bg-dark)')
                     : 'transparent',
-                  color: (analysisMode || "onsend") === mode.id 
-                    ? (appliedTheme === 'dark' ? '#000000' : '#ffffff') 
+                  color: (analysisMode || "onsend") === mode.id
+                    ? (appliedTheme === 'dark' ? '#000000' : '#ffffff')
                     : 'inherit',
                   cursor: mode.id === "aftersend" ? 'not-allowed' : 'pointer',
                   opacity: mode.id === "aftersend" ? 0.5 : 1,
@@ -154,17 +154,17 @@ function IndexPopup() {
         <div style={{ marginBottom: 20 }}>
           <label style={{ display: "block", marginBottom: 10, fontWeight: 600, fontSize: 13, opacity: 0.8 }}>Endpoint Host</label>
           <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-            <select 
+            <select
               className="input-field"
               style={{ flex: '0 0 90px', fontSize: 11, cursor: 'pointer', padding: '10px 4px' }}
               onChange={(e) => handleBaseHostChange(e.target.value)}
-              value={["https://llm.safeseal.xyz", "http://localhost"].includes(baseHost) ? baseHost : "custom"}
+              value={["http://llm.safeseal.xyz", "http://localhost"].includes(baseHost) ? baseHost : "custom"}
             >
-              <option value="https://llm.safeseal.xyz">Cloud</option>
+              <option value="http://llm.safeseal.xyz">Cloud</option>
               <option value="http://localhost">Local</option>
               <option value="custom">Custom</option>
             </select>
-            <input 
+            <input
               type="text"
               className="input-field"
               value={baseHost}
@@ -176,20 +176,20 @@ function IndexPopup() {
         </div>
 
         <div style={{ marginBottom: 24 }}>
-          <div 
+          <div
             onClick={() => setShowAdvanced(!showAdvanced)}
-            style={{ 
-              cursor: 'pointer', 
-              fontSize: 13, 
-              fontWeight: 600, 
-              opacity: 0.6, 
-              display: 'flex', 
+            style={{
+              cursor: 'pointer',
+              fontSize: 13,
+              fontWeight: 600,
+              opacity: 0.6,
+              display: 'flex',
               alignItems: 'center',
               userSelect: 'none'
             }}
           >
-            <span style={{ 
-              display: 'inline-block', 
+            <span style={{
+              display: 'inline-block',
               transform: showAdvanced ? 'rotate(90deg)' : 'rotate(0deg)',
               transition: 'transform 0.2s',
               marginRight: 8,
@@ -197,11 +197,11 @@ function IndexPopup() {
             }}>▶</span>
             Advanced Endpoints
           </div>
-          
+
           {showAdvanced && (
-            <div style={{ 
-              paddingLeft: 14, 
-              borderLeft: '2px solid var(--color-border-dark)', 
+            <div style={{
+              paddingLeft: 14,
+              borderLeft: '2px solid var(--color-border-dark)',
               display: 'flex',
               flexDirection: 'column',
               gap: 16,
@@ -209,7 +209,7 @@ function IndexPopup() {
             }}>
               <div>
                 <label style={{ display: "block", marginBottom: 6, fontWeight: 600, fontSize: 11, opacity: 0.7 }}>Ollama / Gemini Endpoint</label>
-                <input 
+                <input
                   type="text"
                   className="input-field"
                   style={{ padding: '8px 10px', fontSize: 12 }}
@@ -220,7 +220,7 @@ function IndexPopup() {
 
               <div>
                 <label style={{ display: "block", marginBottom: 6, fontWeight: 600, fontSize: 11, opacity: 0.7 }}>Presidio Endpoint</label>
-                <input 
+                <input
                   type="text"
                   className="input-field"
                   style={{ padding: '8px 10px', fontSize: 12 }}
@@ -233,8 +233,8 @@ function IndexPopup() {
         </div>
 
         <div style={{ marginTop: 8 }}>
-          <button 
-            className="btn" 
+          <button
+            className="btn"
             onClick={() => window.open("tabs/dashboard.html", "_blank")}
             style={{ width: '100%', padding: '12px', fontSize: 14 }}
           >
@@ -242,7 +242,7 @@ function IndexPopup() {
           </button>
         </div>
       </div>
-      
+
       <style jsx>{`
         .theme-light {
           background-color: var(--color-bg-light) !important;
