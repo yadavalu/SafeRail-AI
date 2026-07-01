@@ -8,7 +8,7 @@ const storage = new Storage()
 const MODEL_NAME = "saferail-llama"
 
 const DEFAULT_OLLAMA = "http://localhost:11434/api/chat"
-const DEFAULT_PRESIDIO = "http://localhost:3000/analyze"
+const DEFAULT_PRESIDIO = "https://llm.safeseal.xyz/analyze"
 
 // --- ANALYTICS ---
 // --- ANALYTICS ---

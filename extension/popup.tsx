@@ -193,7 +193,7 @@ function IndexPopup() {
               className="input-field"
               style={{ flex: '0 0 90px', fontSize: 11, cursor: 'pointer', padding: '10px 4px' }}
               onChange={(e) => handleBaseHostChange(e.target.value)}
-              value={["https://llm.safeseal.xyz", "http://localhost"].includes(baseHost) ? baseHost : "custom"}
+              value={["https://llm.safeseal.xyz", "http://localhost"].includes(baseHost || "https://llm.safeseal.xyz") ? (baseHost || "https://llm.safeseal.xyz") : "custom"}
             >
               <option value="https://llm.safeseal.xyz">Cloud</option>
               <option value="http://localhost">Local</option>
@@ -202,7 +202,7 @@ function IndexPopup() {
             <input
               type="text"
               className="input-field"
-              value={baseHost}
+              value={baseHost || "https://llm.safeseal.xyz"}
               onChange={(e) => handleBaseHostChange(e.target.value)}
               placeholder="http://localhost"
               style={{ flex: 1, fontSize: 12 }}
@@ -248,7 +248,7 @@ function IndexPopup() {
                   type="text"
                   className="input-field"
                   style={{ padding: '8px 10px', fontSize: 12 }}
-                  value={ollamaEndpoint}
+                  value={ollamaEndpoint || "https://llm.safeseal.xyz/gemini/chat"}
                   onChange={(e) => setOllamaEndpoint(e.target.value)}
                 />
               </div>
@@ -259,7 +259,7 @@ function IndexPopup() {
                   type="text"
                   className="input-field"
                   style={{ padding: '8px 10px', fontSize: 12 }}
-                  value={presidioEndpoint}
+                  value={presidioEndpoint || "https://llm.safeseal.xyz/analyze"}
                   onChange={(e) => setPresidioEndpoint(e.target.value)}
                 />
               </div>

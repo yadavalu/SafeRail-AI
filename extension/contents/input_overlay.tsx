@@ -52,6 +52,67 @@ const isAllowedOnSendSite = (): boolean => {
   )
 }
 
+const NAMED_ENTITIES: Record<string, string> = {
+  'ä': 'auml', 'Ä': 'Auml',
+  'ö': 'ouml', 'Ö': 'Ouml',
+  'ü': 'uuml', 'Ü': 'Uuml',
+  'ß': 'szlig',
+  '&': 'amp',
+  '<': 'lt',
+  '>': 'gt',
+  '"': 'quot',
+  "'": 'apos',
+  'é': 'eacute', 'É': 'Eacute',
+  'è': 'egrave', 'È': 'Egrave',
+  'à': 'agrave', 'À': 'Agrave',
+  'ç': 'ccedil', 'Ç': 'Ccedil'
+}
+
+const DECOMPOSED_MAP: Record<string, string> = {
+  'ä': 'a\u0308', 'Ä': 'A\u0308',
+  'ö': 'o\u0308', 'Ö': 'O\u0308',
+  'ü': 'u\u0308', 'Ü': 'U\u0308',
+  'é': 'e\u0301', 'É': 'E\u0301',
+  'è': 'e\u0300', 'È': 'E\u0300',
+  'à': 'a\u0300', 'À': 'A\u0300',
+}
+
+const getCharRegexPattern = (char: string): string => {
+  if (char === ' ' || char === '\u00a0') {
+    return '(?:[ \u00a0]|&nbsp;|&#160;|&#x0*[aA]0;)'
+  }
+  
+  const code = char.charCodeAt(0)
+  
+  if ((code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122)) {
+    return char
+  }
+  
+  if (code > 127 || ['&', '<', '>', '"', "'"].includes(char)) {
+    const hex = code.toString(16)
+    const parts = [
+      char.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')
+    ]
+    
+    const decomposed = DECOMPOSED_MAP[char]
+    if (decomposed) {
+      parts.push(decomposed)
+    }
+    
+    const named = NAMED_ENTITIES[char]
+    if (named) {
+      parts.push(`&${named};`)
+    }
+    
+    parts.push(`&#${code};`)
+    parts.push(`&#[xX]0*${hex};`)
+    
+    return `(?:${parts.join('|')})`
+  }
+  
+  return char.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')
+}
+
 const ComplianceWidget = () => {
   const [theme] = useStorage("theme", "system")
   const [analysisMode] = useStorage("analysisMode", "onsend")
@@ -243,8 +304,12 @@ const ComplianceWidget = () => {
     const html = element.innerHTML
     if (html.includes(styleString)) return
 
-    const escaped = textToHighlight.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')
-    const regex = new RegExp(`(${escaped})`, 'gi')
+    const normalizedText = textToHighlight.normalize("NFC")
+    let pattern = ""
+    for (let i = 0; i < normalizedText.length; i++) {
+      pattern += getCharRegexPattern(normalizedText[i])
+    }
+    const regex = new RegExp(`(${pattern})`, 'gi')
 
     let replaced = false
     const newHTML = html.replace(regex, (match) => {
