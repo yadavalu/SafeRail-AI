@@ -41,6 +41,17 @@ const MinimizeIcon = () => (
   </svg>
 )
 
+const isAllowedOnSendSite = (): boolean => {
+  const host = window.location.hostname.toLowerCase()
+  return (
+    host.includes("gmail.com") ||
+    host.includes("mail.google.com") ||
+    host.includes("outlook") ||
+    host.includes("yahoo.com") ||
+    host.includes("yahoo.")
+  )
+}
+
 const ComplianceWidget = () => {
   const [theme] = useStorage("theme", "system")
   const [analysisMode] = useStorage("analysisMode", "onsend")
@@ -392,6 +403,11 @@ const ComplianceWidget = () => {
         const activeEl = document.activeElement as HTMLElement
         if (isTextField(activeEl)) {
             lastElement.current = activeEl
+            if (effectiveMode !== "realtime" && !isAllowedOnSendSite()) {
+                setIsVisible(false)
+                setIsExpanded(false)
+                return
+            }
             setIsVisible(true)
             
             if (effectiveMode !== "realtime") {
@@ -476,6 +492,8 @@ const ComplianceWidget = () => {
       const target = e.target as HTMLElement
       const sendBtn = findSendButton(target)
       if (!sendBtn) return
+
+      if (!isAllowedOnSendSite()) return
 
       if (effectiveMode === "realtime") {
         const textElement = lastElement.current || (document.activeElement as HTMLElement)
@@ -575,6 +593,8 @@ const ComplianceWidget = () => {
 
       const target = e.target as HTMLElement
       if (!isTextField(target)) return
+
+      if (!isAllowedOnSendSite()) return
 
       if (effectiveMode === "realtime") {
         clearUnderlines(target)

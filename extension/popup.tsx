@@ -12,6 +12,33 @@ function IndexPopup() {
   const [analysisMode, setAnalysisMode] = useStorage("analysisMode", "onsend")
   const [realTimeAnalysis, setRealTimeAnalysis] = useStorage("realTimeAnalysis", false)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [isAllowedSite, setIsAllowedSite] = useState(true)
+
+  useEffect(() => {
+    if (typeof chrome !== "undefined" && chrome.tabs) {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const activeTab = tabs[0]
+        if (activeTab?.url) {
+          try {
+            const url = new URL(activeTab.url)
+            const host = url.hostname.toLowerCase()
+            const allowed = (
+              host.includes("gmail.com") ||
+              host.includes("mail.google.com") ||
+              host.includes("outlook") ||
+              host.includes("yahoo.com") ||
+              host.includes("yahoo.")
+            )
+            setIsAllowedSite(allowed)
+          } catch (e) {
+            setIsAllowedSite(false)
+          }
+        } else {
+          setIsAllowedSite(false)
+        }
+      })
+    }
+  }, [])
 
   // Sync analysisMode with realTimeAnalysis for backwards compatibility
   useEffect(() => {
@@ -116,38 +143,46 @@ function IndexPopup() {
               { id: "realtime", label: "Real-Time" },
               { id: "onsend", label: "On Send" },
               { id: "aftersend", label: "After Send" }
-            ].map(mode => (
-              <button
-                key={mode.id}
-                onClick={() => setAnalysisMode(mode.id)}
-                disabled={mode.id === "aftersend"}
-                style={{
-                  flex: 1,
-                  padding: '8px 4px',
-                  fontSize: 11,
-                  fontWeight: 600,
-                  borderRadius: 6,
-                  border: 'none',
-                  backgroundColor: (analysisMode || "onsend") === mode.id
-                    ? (appliedTheme === 'dark' ? '#ffffff' : 'var(--color-bg-dark)')
-                    : 'transparent',
-                  color: (analysisMode || "onsend") === mode.id
-                    ? (appliedTheme === 'dark' ? '#000000' : '#ffffff')
-                    : 'inherit',
-                  cursor: mode.id === "aftersend" ? 'not-allowed' : 'pointer',
-                  opacity: mode.id === "aftersend" ? 0.5 : 1,
-                  transition: 'all 0.2s ease',
-                  boxShadow: (analysisMode || "onsend") === mode.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
-                }}
-              >
-                {mode.label}
-              </button>
-            ))}
+            ].map(mode => {
+              const isDisabled = mode.id === "aftersend" || (mode.id === "onsend" && !isAllowedSite)
+              return (
+                <button
+                  key={mode.id}
+                  onClick={() => setAnalysisMode(mode.id)}
+                  disabled={isDisabled}
+                  style={{
+                    flex: 1,
+                    padding: '8px 4px',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    borderRadius: 6,
+                    border: 'none',
+                    backgroundColor: (analysisMode || "onsend") === mode.id
+                      ? (appliedTheme === 'dark' ? '#ffffff' : 'var(--color-bg-dark)')
+                      : 'transparent',
+                    color: (analysisMode || "onsend") === mode.id
+                      ? (appliedTheme === 'dark' ? '#000000' : '#ffffff')
+                      : 'inherit',
+                    cursor: isDisabled ? 'not-allowed' : 'pointer',
+                    opacity: isDisabled ? 0.5 : 1,
+                    transition: 'all 0.2s ease',
+                    boxShadow: (analysisMode || "onsend") === mode.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                  }}
+                >
+                  {mode.label}
+                </button>
+              )
+            })}
           </div>
           <div style={{ fontSize: 11, opacity: 0.6, marginTop: 8, minHeight: 32, lineHeight: 1.4 }}>
             {(analysisMode || "onsend") === "realtime" && "Scanning email text in real-time as you type."}
             {(analysisMode || "onsend") === "onsend" && "Intercepts Send. Halts & displays issues in UI with override option."}
             {(analysisMode || "onsend") === "aftersend" && "Intercepts Send. Stacks in background; blocks and emails sender on violation."}
+            {!isAllowedSite && (
+              <div style={{ color: "#ff9500", marginTop: 4, fontWeight: 600 }}>
+                ⚠️ "On Send" is only available on Gmail, Outlook, or Yahoo Mail.
+              </div>
+            )}
           </div>
         </div>
 
