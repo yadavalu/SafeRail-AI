@@ -28,7 +28,7 @@
     "typescript": "5.3.3"
   },
   "manifest": {
-    "version": "0.0.3",
+    "version": "0.0.4",
     "host_permissions": [
       "https://*/*",
       "http://localhost/*",

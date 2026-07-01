@@ -6,9 +6,9 @@ import bannerImg from "data-base64:./assets/banner_transparent.png"
 function IndexPopup() {
   const [theme, setTheme] = useStorage("theme", "system")
   const [modelType, setModelType] = useStorage("modelType", "gemini")
-  const [baseHost, setBaseHost] = useStorage("baseHost", "http://llm.safeseal.xyz")
-  const [ollamaEndpoint, setOllamaEndpoint] = useStorage("ollamaEndpoint", "http://llm.safeseal.xyz/gemini/chat")
-  const [presidioEndpoint, setPresidioEndpoint] = useStorage("presidioEndpoint", "http://llm.safeseal.xyz/analyze")
+  const [baseHost, setBaseHost] = useStorage("baseHost", "https://llm.safeseal.xyz")
+  const [ollamaEndpoint, setOllamaEndpoint] = useStorage("ollamaEndpoint", "https://llm.safeseal.xyz/gemini/chat")
+  const [presidioEndpoint, setPresidioEndpoint] = useStorage("presidioEndpoint", "https://llm.safeseal.xyz/analyze")
   const [analysisMode, setAnalysisMode] = useStorage("analysisMode", "onsend")
   const [realTimeAnalysis, setRealTimeAnalysis] = useStorage("realTimeAnalysis", false)
   const [showAdvanced, setShowAdvanced] = useState(false)
@@ -158,9 +158,9 @@ function IndexPopup() {
               className="input-field"
               style={{ flex: '0 0 90px', fontSize: 11, cursor: 'pointer', padding: '10px 4px' }}
               onChange={(e) => handleBaseHostChange(e.target.value)}
-              value={["http://llm.safeseal.xyz", "http://localhost"].includes(baseHost) ? baseHost : "custom"}
+              value={["https://llm.safeseal.xyz", "http://localhost"].includes(baseHost) ? baseHost : "custom"}
             >
-              <option value="http://llm.safeseal.xyz">Cloud</option>
+              <option value="https://llm.safeseal.xyz">Cloud</option>
               <option value="http://localhost">Local</option>
               <option value="custom">Custom</option>
             </select>
