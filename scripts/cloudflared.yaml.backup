@@ -1,9 +1,5 @@
-tunnel: 6ca55e40-6c7b-4b6e-bbb7-9aab73bab588
-credentials-file: C:\Users\User\.cloudflared\6ca55e40-6c7b-4b6e-bbb7-9aab73bab588.json
-
-# THE FIX:
-protocol: http2
-dns-resolver-upstream: 1.1.1.1
+tunnel: 6fc591ff-9e0e-45e8-a352-d060e561666f
+credentials-file: C:\Users\User\.cloudflared\6fc591ff-9e0e-45e8-a352-d060e561666f.json
 
 ingress:
   # Route Gemini API traffic
