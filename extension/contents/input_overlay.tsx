@@ -4,8 +4,6 @@ import { useState, useEffect, useRef } from "react"
 import { sendToBackground } from "@plasmohq/messaging"
 import styleText from "data-text:./input_overlay.css"
 import localUnsafeDomainsText from "data-text:../assets/unsafe_domains.txt"
-import { db } from "../firebase-config"
-import { doc, getDoc } from "firebase/firestore/lite"
 
 // Import SVG assets
 import greenIcon from "data-base64:../assets/green.svg"
@@ -234,9 +232,9 @@ const ComplianceWidget = () => {
   useEffect(() => {
     const fetchDomains = async () => {
         try {
-            const d = await getDoc(doc(db, "config", "settings"))
-            if (d.exists() && d.data().unsafe_domains) {
-                const domains = d.data().unsafe_domains.split("\n").map(s => s.trim().toLowerCase()).filter(Boolean)
+            const response = await sendToBackground({ name: "get-settings" })
+            if (response && response.settings && response.settings.unsafe_domains) {
+                const domains = response.settings.unsafe_domains.split("\n").map(s => s.trim().toLowerCase()).filter(Boolean)
                 setUnsafeDomains(domains)
                 return
             }

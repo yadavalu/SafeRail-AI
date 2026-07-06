@@ -1,3 +1,5 @@
+# Production server
+
 tunnel: 6ca55e40-6c7b-4b6e-bbb7-9aab73bab588
 credentials-file: C:\Users\User\.cloudflared\6ca55e40-6c7b-4b6e-bbb7-9aab73bab588.json
 
@@ -9,6 +11,11 @@ ingress:
   # Route Gemini API traffic
   - hostname: llm.safeseal.xyz
     path: ^/gemini/.*
+    service: http://localhost:3000
+
+  # Route SafeRail Backend Auth & Config APIs
+  - hostname: llm.safeseal.xyz
+    path: ^/api/(auth|config|analytics)/?.*
     service: http://localhost:3000
 
   # Route Ollama API traffic

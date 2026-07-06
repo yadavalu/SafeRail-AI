@@ -1,7 +1,5 @@
 import type { PlasmoMessaging } from "@plasmohq/messaging"
 import { Storage } from "@plasmohq/storage"
-import { db } from "../../firebase-config"
-import { doc, getDoc, updateDoc, increment, setDoc } from "firebase/firestore/lite"
 import localComplianceRules from "data-text:../../assets/compliance_rules.txt"
 
 const storage = new Storage()
@@ -14,42 +12,19 @@ const DEFAULT_PRESIDIO = "https://llm.safeseal.xyz/analyze"
 // --- ANALYTICS ---
 export const reportAnalytics = async (type: "scanned" | "warning" | "violation" | "confidential", rule?: string, email?: string) => {
     try {
-        const ref = doc(db, "config", "analytics");
-        const docSnap = await getDoc(ref);
-        let data: any = { scanned: 0, warning: 0, violation: 0, confidential: 0, rule_triggers: {}, recent_incidents: [] };
-        if (docSnap.exists()) {
-            data = docSnap.data();
-        }
-        
-        data[type] = (data[type] || 0) + 1;
-        
-        if (rule) {
-            const cleanRule = rule.trim();
-            if (cleanRule) {
-                if (!data.rule_triggers) data.rule_triggers = {};
-                data.rule_triggers[cleanRule] = (data.rule_triggers[cleanRule] || 0) + 1;
-            }
-        }
+        const baseHost = await storage.get("baseHost") || "https://llm.safeseal.xyz"
+        const cleanHost = baseHost.replace(/\/$/, "")
+        const isLocal = cleanHost.includes("localhost") || cleanHost.includes("127.0.0.1") || !cleanHost.startsWith("http")
+        const backendUrl = isLocal ? `${cleanHost}:3000/api/analytics/report` : `${cleanHost}/api/analytics/report`
 
-        if (type === "warning" || type === "violation") {
-            const newIncident = {
-                id: Math.random().toString(36).substring(2, 9),
-                email: email || "sender@company.com",
-                rule: rule || "Compliance policy trigger",
-                severity: type === "violation" ? "violation" : "warning",
-                date: new Date().toISOString()
-            };
-            
-            if (!data.recent_incidents) {
-                data.recent_incidents = [];
-            }
-            data.recent_incidents.unshift(newIncident);
-            if (data.recent_incidents.length > 10) {
-                data.recent_incidents = data.recent_incidents.slice(0, 10);
-            }
+        const response = await fetch(backendUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ type, rule, email })
+        })
+        if (!response.ok) {
+            console.error("Failed to report analytics to backend:", response.statusText)
         }
-        
-        await setDoc(ref, data, { merge: true });
     } catch (e) {
         console.error("Analytics Error:", e);
     }
@@ -58,9 +33,17 @@ export const reportAnalytics = async (type: "scanned" | "warning" | "violation" 
 // --- CONFIG FETCHING ---
 export const getRules = async () => {
     try {
-        const d = await getDoc(doc(db, "config", "settings"));
-        if (d.exists() && d.data().compliance_rules) {
-            return d.data().compliance_rules;
+        const baseHost = await storage.get("baseHost") || "https://llm.safeseal.xyz"
+        const cleanHost = baseHost.replace(/\/$/, "")
+        const isLocal = cleanHost.includes("localhost") || cleanHost.includes("127.0.0.1") || !cleanHost.startsWith("http")
+        const backendUrl = isLocal ? `${cleanHost}:3000/api/config/settings` : `${cleanHost}/api/config/settings`
+
+        const response = await fetch(backendUrl)
+        if (response.ok) {
+            const data = await response.json()
+            if (data.compliance_rules) {
+                return data.compliance_rules
+            }
         }
     } catch (e) {
         console.error("Rules Fetch Error:", e);

@@ -39,7 +39,10 @@ else:
     logger.warning("GEMINI_API_KEY not found in .env")
 
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials, firestore, auth as admin_auth
+import requests
+
+FIREBASE_API_KEY = os.getenv("FIREBASE_API_KEY", "AIzaSyCjpAamIyD0g0_daGWX9SiB_aEa_yP1ExE")
 
 # Initialize Firebase Admin
 db = None
@@ -70,6 +73,18 @@ def initialize_firebase():
                        action="Firebase features disabled. Please place the key in the server directory.")
 
 initialize_firebase()
+
+def get_authenticated_user():
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return None
+    id_token = auth_header.split("Bearer ")[1]
+    try:
+        decoded_token = admin_auth.verify_id_token(id_token)
+        return decoded_token
+    except Exception as e:
+        logger.error("Token verification failed", error=str(e))
+        return None
 
 app = Flask(__name__)
 CORS(app) 
@@ -306,13 +321,174 @@ SafeRail AI Compliance Team"""
             smtp_error = str(e)
             logger.error("Failed to send email via SMTP", error=smtp_error)
             
-    return jsonify({
-        "status": "success",
-        "message": "Blocked email handled",
-        "saved_to_disk": filepath,
-        "sent_via_smtp": sent_via_smtp,
-        "smtp_error": smtp_error
-    })
+@app.route("/api/auth/login", methods=["POST"])
+def auth_login():
+    data = request.json or {}
+    email = data.get("email")
+    password = data.get("password")
+    if not email or not password:
+        return jsonify({"error": "Email and password are required"}), 400
+
+    url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={FIREBASE_API_KEY}"
+    payload = {
+        "email": email,
+        "password": password,
+        "returnSecureToken": True
+    }
+    try:
+        res = requests.post(url, json=payload)
+        res_data = res.json()
+        if res.status_code != 200:
+            error_msg = res_data.get("error", {}).get("message", "Authentication failed")
+            return jsonify({"error": error_msg}), res.status_code
+        return jsonify(res_data)
+    except Exception as e:
+        logger.error("Auth REST API error", error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/analytics", methods=["GET"])
+def get_analytics():
+    user = get_authenticated_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+        
+    if not db:
+        return jsonify({"error": "Firebase database not initialized"}), 500
+
+    try:
+        doc_ref = db.collection("config").document("analytics")
+        doc_snap = doc_ref.get()
+        if doc_snap.exists:
+            return jsonify(doc_snap.to_dict())
+        else:
+            return jsonify({
+                "scanned": 0,
+                "warning": 0,
+                "violation": 0,
+                "confidential": 0
+            })
+    except Exception as e:
+        logger.error("Failed to load analytics", error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/config/settings", methods=["GET"])
+def get_settings():
+    if not db:
+        rules_path = os.path.join("extension", "assets", "compliance_rules.txt")
+        domains_path = os.path.join("extension", "assets", "unsafe_domains.txt")
+        rules = ""
+        domains = ""
+        if os.path.exists(rules_path):
+            with open(rules_path, "r") as f:
+                rules = f.read().strip()
+        if os.path.exists(domains_path):
+            with open(domains_path, "r") as f:
+                domains = f.read().strip()
+        return jsonify({
+            "compliance_rules": rules,
+            "unsafe_domains": domains,
+            "denied_entities": []
+        })
+
+    try:
+        doc_ref = db.collection("config").document("settings")
+        doc_snap = doc_ref.get()
+        if doc_snap.exists:
+            return jsonify(doc_snap.to_dict())
+        else:
+            return jsonify({
+                "compliance_rules": "",
+                "unsafe_domains": "",
+                "denied_entities": []
+            })
+    except Exception as e:
+        logger.error("Failed to load settings", error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/config/settings", methods=["POST"])
+def save_settings():
+    user = get_authenticated_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    if not db:
+        return jsonify({"error": "Firebase database not initialized"}), 500
+
+    data = request.json or {}
+    unsafe_domains = data.get("unsafe_domains")
+    compliance_rules = data.get("compliance_rules")
+    denied_entities = data.get("denied_entities")
+
+    update_payload = {}
+    if unsafe_domains is not None:
+        update_payload["unsafe_domains"] = unsafe_domains
+    if compliance_rules is not None:
+        update_payload["compliance_rules"] = compliance_rules
+    if denied_entities is not None:
+        update_payload["denied_entities"] = denied_entities
+
+    try:
+        doc_ref = db.collection("config").document("settings")
+        doc_ref.set(update_payload, merge=True)
+        return jsonify({"status": "success", "message": "Settings updated"})
+    except Exception as e:
+        logger.error("Failed to save settings", error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/analytics/report", methods=["POST"])
+def report_analytics_endpoint():
+    if not db:
+        return jsonify({"error": "Firebase database not initialized"}), 500
+
+    data = request.json or {}
+    report_type = data.get("type")
+    rule = data.get("rule")
+    email = data.get("email")
+
+    if report_type not in ["scanned", "warning", "violation", "confidential"]:
+        return jsonify({"error": "Invalid report type"}), 400
+
+    try:
+        doc_ref = db.collection("config").document("analytics")
+        doc_snap = doc_ref.get()
+        
+        analytics_data = {
+            "scanned": 0,
+            "warning": 0,
+            "violation": 0,
+            "confidential": 0,
+            "rule_triggers": {},
+            "recent_incidents": []
+        }
+        
+        if doc_snap.exists:
+            analytics_data.update(doc_snap.to_dict())
+
+        analytics_data[report_type] = analytics_data.get(report_type, 0) + 1
+
+        if rule:
+            clean_rule = rule.strip()
+            if clean_rule:
+                rule_triggers = analytics_data.setdefault("rule_triggers", {})
+                rule_triggers[clean_rule] = rule_triggers.get(clean_rule, 0) + 1
+
+        if report_type in ["warning", "violation"]:
+            new_incident = {
+                "id": str(int(time.time() * 1000)),
+                "rule": rule or "Compliance policy trigger",
+                "severity": report_type,
+                "date": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+            }
+            recent_incidents = analytics_data.setdefault("recent_incidents", [])
+            recent_incidents.insert(0, new_incident)
+            if len(recent_incidents) > 10:
+                analytics_data["recent_incidents"] = recent_incidents[:10]
+
+        doc_ref.set(analytics_data, merge=True)
+        return jsonify({"status": "success", "message": "Analytics reported"})
+    except Exception as e:
+        logger.error("Failed to report analytics", error=str(e))
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     threading.Thread(target=start_ollama).start()

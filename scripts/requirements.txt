@@ -7,3 +7,4 @@ waitress
 structlog
 google-generativeai
 python-dotenv
+requests

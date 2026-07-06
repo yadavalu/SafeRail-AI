@@ -7,6 +7,15 @@ function IndexPopup() {
   const [theme, setTheme] = useStorage("theme", "system")
   const [modelType, setModelType] = useStorage("modelType", "gemini")
   const [baseHost, setBaseHost] = useStorage("baseHost", "https://llm.safeseal.xyz")
+  const [localBaseHost, setLocalBaseHost] = useState("")
+  const [isFocused, setIsFocused] = useState(false)
+
+  useEffect(() => {
+    if (baseHost !== undefined && !isFocused) {
+      setLocalBaseHost(baseHost)
+    }
+  }, [baseHost, isFocused])
+
   const [ollamaEndpoint, setOllamaEndpoint] = useStorage("ollamaEndpoint", "https://llm.safeseal.xyz/gemini/chat")
   const [presidioEndpoint, setPresidioEndpoint] = useStorage("presidioEndpoint", "https://llm.safeseal.xyz/analyze")
   const [analysisMode, setAnalysisMode] = useStorage("analysisMode", "onsend")
@@ -61,6 +70,7 @@ function IndexPopup() {
   }, [])
 
   const handleBaseHostChange = (newHost: string) => {
+    setLocalBaseHost(newHost)
     setBaseHost(newHost)
     updateEndpoints(newHost, modelType)
   }
@@ -193,20 +203,22 @@ function IndexPopup() {
               className="input-field"
               style={{ flex: '0 0 90px', fontSize: 11, cursor: 'pointer', padding: '10px 4px' }}
               onChange={(e) => handleBaseHostChange(e.target.value)}
-              value={["https://llm.safeseal.xyz", "http://localhost"].includes(baseHost || "https://llm.safeseal.xyz") ? (baseHost || "https://llm.safeseal.xyz") : "custom"}
+              value={["https://llm.safeseal.xyz", "http://localhost"].includes(localBaseHost || "https://llm.safeseal.xyz") ? (localBaseHost || "https://llm.safeseal.xyz") : "custom"}
             >
               <option value="https://llm.safeseal.xyz">Cloud</option>
               <option value="http://localhost">Local</option>
               <option value="custom">Custom</option>
             </select>
-            <input
-              type="text"
-              className="input-field"
-              value={baseHost || "https://llm.safeseal.xyz"}
-              onChange={(e) => handleBaseHostChange(e.target.value)}
-              placeholder="http://localhost"
-              style={{ flex: 1, fontSize: 12 }}
-            />
+             <input
+               type="text"
+               className="input-field"
+               value={localBaseHost || "https://llm.safeseal.xyz"}
+               onChange={(e) => handleBaseHostChange(e.target.value)}
+               onFocus={() => setIsFocused(true)}
+               onBlur={() => setIsFocused(false)}
+               placeholder="http://localhost"
+               style={{ flex: 1, fontSize: 12 }}
+             />
           </div>
         </div>
 

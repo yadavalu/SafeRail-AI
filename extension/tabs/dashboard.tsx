@@ -1,7 +1,4 @@
 import { useState, useEffect } from "react"
-import { auth, db } from "../firebase-config"
-import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth"
-import { doc, getDoc, setDoc } from "firebase/firestore/lite"
 import { useStorage } from "@plasmohq/storage/hook"
 import "../style.css"
 
@@ -38,7 +35,14 @@ type Analytics = {
 
 export default function Dashboard() {
   const [theme] = useStorage("theme", "system")
-  const [user, setUser] = useState(null)
+  const [baseHost] = useStorage("baseHost", "https://llm.safeseal.xyz")
+  const [user, setUser] = useState<{ email: string; token: string } | null>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("adminUser")
+      return stored ? JSON.parse(stored) : null
+    }
+    return null
+  })
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [expandedIncidentId, setExpandedIncidentId] = useState<string | null>(null)
@@ -71,55 +75,141 @@ export default function Dashboard() {
   }, [appliedTheme])
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u)
-      if (u) {
-        loadData()
-        loadAnalytics()
-      }
-    })
-    return () => unsubscribe()
-  }, [])
+    if (user) {
+      loadData()
+      loadAnalytics()
+    }
+  }, [user])
 
   const loadAnalytics = async () => {
+    if (!user) return
     try {
-      const d = await getDoc(doc(db, "config", "analytics"))
-      if (d.exists()) setAnalytics(prev => ({ ...prev, ...(d.data() as Partial<Analytics>) }))
+      const cleanHost = baseHost.replace(/\/$/, "")
+      const isLocal = cleanHost.includes("localhost") || cleanHost.includes("127.0.0.1") || !cleanHost.startsWith("http")
+      const analyticsUrl = isLocal ? `${cleanHost}:3000/api/analytics` : `${cleanHost}/api/analytics`
+
+      const res = await fetch(analyticsUrl, {
+        headers: {
+          "Authorization": `Bearer ${user.token}`
+        }
+      })
+      
+      let data = null
+      const contentType = res.headers.get("content-type")
+      if (contentType && contentType.includes("application/json")) {
+        data = await res.json()
+      }
+      
+      if (!res.ok) {
+        throw new Error((data && data.error) || `Server error: ${res.status} ${res.statusText}`)
+      }
+      if (data) {
+        setAnalytics(prev => ({ ...prev, ...data }))
+      }
     } catch (e) {
       console.error("Analytics load error:", e)
     }
   }
 
   const loadData = async () => {
-    const configRef = doc(db, "config", "settings")
-    const d = await getDoc(configRef)
-    if (d.exists()) {
-      setUnsafeDomains(d.data().unsafe_domains || "")
-      setComplianceRules(d.data().compliance_rules || "")
-      setDeniedEntities(d.data().denied_entities || [])
+    if (!user) return
+    try {
+      const cleanHost = baseHost.replace(/\/$/, "")
+      const isLocal = cleanHost.includes("localhost") || cleanHost.includes("127.0.0.1") || !cleanHost.startsWith("http")
+      const configUrl = isLocal ? `${cleanHost}:3000/api/config/settings` : `${cleanHost}/api/config/settings`
+
+      const res = await fetch(configUrl)
+      
+      let data = null
+      const contentType = res.headers.get("content-type")
+      if (contentType && contentType.includes("application/json")) {
+        data = await res.json()
+      }
+
+      if (!res.ok) {
+        throw new Error((data && data.error) || `Server error: ${res.status} ${res.statusText}`)
+      }
+      if (data) {
+        setUnsafeDomains(data.unsafe_domains || "")
+        setComplianceRules(data.compliance_rules || "")
+        setDeniedEntities(data.denied_entities || [])
+      }
+    } catch (e) {
+      console.error("Config load error:", e)
     }
   }
 
   const handleLogin = async (e) => {
     e.preventDefault()
     try {
-      await signInWithEmailAndPassword(auth, email, password)
+      const cleanHost = baseHost.replace(/\/$/, "")
+      const isLocal = cleanHost.includes("localhost") || cleanHost.includes("127.0.0.1") || !cleanHost.startsWith("http")
+      const loginUrl = isLocal ? `${cleanHost}:3000/api/auth/login` : `${cleanHost}/api/auth/login`
+
+      const res = await fetch(loginUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
+      })
+      
+      let data = null
+      const contentType = res.headers.get("content-type")
+      if (contentType && contentType.includes("application/json")) {
+        data = await res.json()
+      }
+
+      if (!res.ok) {
+        throw new Error((data && data.error) || `Server error: ${res.status} ${res.statusText}`)
+      }
+      if (!data || !data.idToken) {
+        throw new Error("Invalid server response: missing identity token")
+      }
+      const loggedInUser = { email: data.email, token: data.idToken }
+      setUser(loggedInUser)
+      localStorage.setItem("adminUser", JSON.stringify(loggedInUser))
     } catch (err) {
       alert("Login failed: " + err.message)
     }
   }
 
   const handleSave = async () => {
+    if (!user) return
     try {
-      await setDoc(doc(db, "config", "settings"), {
-        unsafe_domains: unsafeDomains,
-        compliance_rules: complianceRules,
-        denied_entities: deniedEntities
-      }, { merge: true })
+      const cleanHost = baseHost.replace(/\/$/, "")
+      const isLocal = cleanHost.includes("localhost") || cleanHost.includes("127.0.0.1") || !cleanHost.startsWith("http")
+      const configUrl = isLocal ? `${cleanHost}:3000/api/config/settings` : `${cleanHost}/api/config/settings`
+
+      const res = await fetch(configUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${user.token}`
+        },
+        body: JSON.stringify({
+          unsafe_domains: unsafeDomains,
+          compliance_rules: complianceRules,
+          denied_entities: deniedEntities
+        })
+      })
+      
+      let data = null
+      const contentType = res.headers.get("content-type")
+      if (contentType && contentType.includes("application/json")) {
+        data = await res.json()
+      }
+
+      if (!res.ok) {
+        throw new Error((data && data.error) || `Server error: ${res.status} ${res.statusText}`)
+      }
       alert("Settings saved successfully! Please restart the server to update the changes.")
     } catch (err) {
       alert("Save failed: " + err.message)
     }
+  }
+
+  const handleLogout = () => {
+    setUser(null)
+    localStorage.removeItem("adminUser")
   }
 
   const toggleEntity = (entity: string) => {
@@ -243,7 +333,7 @@ export default function Dashboard() {
               filter: appliedTheme === "dark" ? "invert(1)" : "none"
             }}
           />
-          <button onClick={() => signOut(auth)} className="btn" style={{ backgroundColor: "rgba(255,255,255,0.1)", color: "inherit", border: "1px solid var(--color-border-dark)" }}>Logout</button>
+          <button onClick={handleLogout} className="btn" style={{ backgroundColor: "rgba(255,255,255,0.1)", color: "inherit", border: "1px solid var(--color-border-dark)" }}>Logout</button>
         </div>
 
         <h1 style={{ marginBottom: 10, fontSize: 34, fontWeight: 800, letterSpacing: "-1px" }}>SafeRail Admin Dashboard</h1>
@@ -300,7 +390,7 @@ export default function Dashboard() {
 
           <div className="card" style={{ padding: 28 }}>
             <h2 style={{ margin: "0 0 8px", fontSize: 20, fontWeight: 800 }}>Recent Activity</h2>
-            <p style={{ margin: "0 0 20px", opacity: 0.62, fontSize: 13 }}>Latest incidents by user, rule type, severity, and date.</p>
+            <p style={{ margin: "0 0 20px", opacity: 0.62, fontSize: 13 }}>Latest incidents by rule, severity, and date.</p>
             <div style={{ display: "grid", gap: 12, maxHeight: 360, overflowY: "auto", paddingRight: 4 }}>
               {recentIncidents.length ? recentIncidents.map((incident, index) => {
                 const isViolation = String(incident.severity || incident.type || "").toLowerCase().includes("violation")
@@ -325,11 +415,13 @@ export default function Dashboard() {
                     >
                       <div style={{ minWidth: 0 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
-                          <strong style={{ fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{incident.user || incident.email || "Unknown user"}</strong>
                           <span style={{ background: `${severityColor}22`, color: severityColor, border: `1px solid ${severityColor}55`, padding: "3px 8px", borderRadius: 999, fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.4px" }}>{severityLabel}</span>
+                          <strong style={{ fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {incident.rule || incident.ruleType || "Compliance rule"}
+                          </strong>
                         </div>
                         <p style={{ margin: 0, opacity: 0.66, fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {isExpanded ? "Click to collapse" : (incident.rule || incident.ruleType || "Compliance rule")}
+                          {isExpanded ? "Click to collapse" : "Click to view details"}
                         </p>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
