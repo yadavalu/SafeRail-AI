@@ -1,7 +1,7 @@
 {
   "name": "saferail.ai",
   "displayName": "SafeRail AI",
-  "version": "0.0.1",
+  "version": "0.0.7",
   "description": "Safeguard your online interactions with AI-powered content analysis.",
   "author": "Aadith Yadav G.",
   "scripts": {
@@ -27,7 +27,7 @@
     "typescript": "5.3.3"
   },
   "manifest": {
-    "version": "0.0.6",
+    "version": "0.0.7",
     "host_permissions": [
       "https://*/*",
       "http://localhost/*",

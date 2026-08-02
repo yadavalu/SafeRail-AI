@@ -302,6 +302,10 @@ const ComplianceWidget = () => {
     const html = element.innerHTML
     if (html.includes(styleString)) return
 
+    // Strip Google spellcheck span tags first
+    const googleSpanRegex = /<span([^>]*?(?:data-ddnwab|class="[^"]*?(?:Asgive|\bng\b)[^"]*?")[^>]*?)>([\s\S]*?)<\/span>/gi
+    const cleanedHTML = html.replace(googleSpanRegex, '$2')
+
     const normalizedText = textToHighlight.normalize("NFC")
     let pattern = ""
     for (let i = 0; i < normalizedText.length; i++) {
@@ -310,7 +314,7 @@ const ComplianceWidget = () => {
     const regex = new RegExp(`(${pattern})`, 'gi')
 
     let replaced = false
-    const newHTML = html.replace(regex, (match) => {
+    const newHTML = cleanedHTML.replace(regex, (match) => {
       replaced = true
       return `<span class="saferail-highlight" style="${styleString}">${match}</span>`
     })
