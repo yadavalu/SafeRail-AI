@@ -17,7 +17,7 @@ interface StackedMail {
 }
 
 const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
-  const { text, senderEmail, platform } = req.body
+  const { text, senderEmail, recipientEmails, platform } = req.body
 
   if (!text || text.length < 2) {
     res.send({ status: "green" })
@@ -68,8 +68,11 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
 
     // 3. RUN LLM CHECK (Only if not already flagged by Presidio)
     if (finalStatus === "green") {
-      const modelType = await storage.get("modelType") || "gemini"
-      const endpoint = await storage.get("ollamaEndpoint") || (modelType === "gemini" ? "https://llm.safeseal.xyz/gemini/chat" : DEFAULT_OLLAMA)
+      const baseHost = await storage.get("baseHost") || "https://llm.safeseal.xyz"
+      const cleanHost = baseHost.replace(/\/$/, "")
+      const isLocal = cleanHost.includes("localhost") || cleanHost.includes("127.0.0.1") || !cleanHost.startsWith("http")
+      const geminiEndpoint = isLocal ? `${cleanHost}:3000/gemini/chat` : `${cleanHost}/gemini/chat`
+      const endpoint = await storage.get("ollamaEndpoint") || (modelType === "gemini" ? geminiEndpoint : DEFAULT_OLLAMA)
       
       const response = await fetch(endpoint, {
         method: "POST",
@@ -81,6 +84,8 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
           messages: [
             { role: "user", content: `EVALUATE: ${text}\n\nNote: If status is 'warn' or 'clear_warn', please specify the exact rule text that was violated in a "rule_violated" key in the JSON response.` }
           ],
+          senderEmail,
+          recipientEmails
         })
       }).catch(e => {
           throw new Error("LLM_SERVER_DOWN")

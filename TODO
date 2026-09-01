@@ -1,0 +1,13 @@
+I need you to refactor the way the database works entirely. 
+
+We are moving from using a fixed compliance ruleset to a dynamic one that is different for every employee based on their position/role.
+
+Create a system where employees can signin to their accounts and see their personalised ruleset. The personalised ruleset can only be set and edited by admin
+
+Re-use the same dashboard, but make it a general use case dashboard. If login is admin, then it should show everything already shown at the moment. 
+
+If an employee logs in, he should be able to see his recent history only, should be able to see how many of his mails have been flagged, should be able to see his own rule-set.
+
+the unsafe domain still acts for everyone. 
+
+The update configuration option should only be there for admin. 

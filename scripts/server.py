@@ -117,6 +117,65 @@ You are a compliance expert for a company with compliance rules RULESET. You hav
 2. The rewritten text should be compliant with the RULESET.
 3. Provide ONLY the final rewritten text. DO NOT provide explanations, preamble, or any conversational filler."""
 
+def is_recipient_external(sender_email, recipient_emails):
+    if not sender_email or "@" not in sender_email:
+        return False
+    try:
+        sender_domain = sender_email.split("@")[1].strip().lower()
+        for rec in recipient_emails:
+            if "@" in rec:
+                rec_domain = rec.split("@")[1].strip().lower()
+                if rec_domain != sender_domain:
+                    return True
+    except Exception:
+        pass
+    return False
+
+def get_compliance_rules_for_context(sender_email=None, recipient_emails=None):
+    if not db:
+        return get_compliance_rules()
+    try:
+        sender_role = None
+        if sender_email:
+            user_doc = db.collection("users").document(sender_email.lower()).get()
+            if user_doc.exists:
+                sender_role = user_doc.to_dict().get("role")
+
+        rules_ref = db.collection("rules").stream()
+        filtered_rules = []
+        is_external = is_recipient_external(sender_email, recipient_emails) if (sender_email and recipient_emails) else False
+        
+        for r_doc in rules_ref:
+            r = r_doc.to_dict()
+            if r.get("status") == "inactive":
+                continue
+            
+            # Check externalOnly
+            if r.get("externalOnly", False) and not is_external:
+                continue
+                
+            # Check email
+            applied_emails = r.get("appliedTo", [])
+            if applied_emails and isinstance(applied_emails, str) and applied_emails == "all":
+                pass
+            elif applied_emails and "all" not in [em.lower() for em in applied_emails]:
+                if not sender_email or sender_email.lower() not in [em.lower() for em in applied_emails]:
+                    continue
+            
+            title = r.get("title", "").strip()
+            rule_text = r.get("rule", "").strip()
+            if title and rule_text:
+                filtered_rules.append(f"{title}: {rule_text}")
+            elif rule_text:
+                filtered_rules.append(rule_text)
+                
+        if filtered_rules:
+            return "\n".join([f"{i}. {fr}" for i, fr in enumerate(filtered_rules, 1)])
+        
+    except Exception as e:
+        logger.error("Failed to filter compliance rules", error=str(e))
+    return get_compliance_rules()
+
 def get_compliance_rules():
     rules_content = None
     if db:
@@ -210,8 +269,13 @@ def gemini_chat():
     messages = data.get("messages", [])
     if not messages: return jsonify({"error": "No messages"}), 400
     user_input = messages[-1]["content"]
+    
+    sender_email = data.get("senderEmail")
+    recipient_emails = data.get("recipientEmails", [])
+    
     try:
-        model = genai.GenerativeModel('gemini-2.5-flash', system_instruction=get_system_prompt(get_compliance_rules()))
+        rules_content = get_compliance_rules_for_context(sender_email, recipient_emails)
+        model = genai.GenerativeModel('gemini-2.5-flash', system_instruction=get_system_prompt(rules_content))
         response = model.generate_content(user_input)
         
         # Check if the response was blocked by safety filters
@@ -341,6 +405,18 @@ def auth_login():
         if res.status_code != 200:
             error_msg = res_data.get("error", {}).get("message", "Authentication failed")
             return jsonify({"error": error_msg}), res.status_code
+            
+        user_info = {"isAdmin": False, "role": "Employee", "name": email.split("@")[0], "email": email}
+        if db:
+            user_doc = db.collection("users").document(email.lower()).get()
+            if user_doc.exists:
+                user_info.update(user_doc.to_dict())
+            else:
+                if email.lower() == "admin@saferail.com":
+                    user_info["isAdmin"] = True
+                db.collection("users").document(email.lower()).set(user_info)
+
+        res_data["user"] = user_info
         return jsonify(res_data)
     except Exception as e:
         logger.error("Auth REST API error", error=str(e))
@@ -356,17 +432,43 @@ def get_analytics():
         return jsonify({"error": "Firebase database not initialized"}), 500
 
     try:
-        doc_ref = db.collection("config").document("analytics")
-        doc_snap = doc_ref.get()
-        if doc_snap.exists:
-            return jsonify(doc_snap.to_dict())
+        email = user.get("email", "").lower()
+        user_doc = db.collection("users").document(email).get()
+        is_admin = False
+        if user_doc.exists:
+            is_admin = user_doc.to_dict().get("isAdmin", False)
+            
+        analytics_data = {
+            "scanned": 0,
+            "warning": 0,
+            "violation": 0,
+            "confidential": 0,
+            "recent_incidents": []
+        }
+
+        if is_admin:
+            doc_ref = db.collection("config").document("analytics")
+            doc_snap = doc_ref.get()
+            if doc_snap.exists:
+                analytics_data.update(doc_snap.to_dict())
+                
+            incidents_ref = db.collection("incidents").stream()
+            recent_incidents = [doc.to_dict() for doc in incidents_ref]
+            recent_incidents.sort(key=lambda x: x.get("date", ""), reverse=True)
+            analytics_data["recent_incidents"] = recent_incidents[:10]
         else:
-            return jsonify({
-                "scanned": 0,
-                "warning": 0,
-                "violation": 0,
-                "confidential": 0
-            })
+            incidents_ref = db.collection("incidents").where("email", "==", email).stream()
+            incidents = [doc.to_dict() for doc in incidents_ref]
+            incidents.sort(key=lambda x: x.get("date", ""), reverse=True)
+            
+            for inc in incidents:
+                severity = inc.get("severity")
+                if severity == "warning": analytics_data["warning"] += 1
+                elif severity == "violation": analytics_data["violation"] += 1
+                
+            analytics_data["recent_incidents"] = incidents[:10]
+            
+        return jsonify(analytics_data)
     except Exception as e:
         logger.error("Failed to load analytics", error=str(e))
         return jsonify({"error": str(e)}), 500
@@ -387,20 +489,32 @@ def get_settings():
         return jsonify({
             "compliance_rules": rules,
             "unsafe_domains": domains,
-            "denied_entities": []
+            "denied_entities": [],
+            "rules_list": [],
+            "employees": []
         })
 
     try:
-        doc_ref = db.collection("config").document("settings")
-        doc_snap = doc_ref.get()
+        settings_data = {"unsafe_domains": "", "compliance_rules": "", "denied_entities": []}
+        doc_snap = db.collection("config").document("settings").get()
         if doc_snap.exists:
-            return jsonify(doc_snap.to_dict())
-        else:
-            return jsonify({
-                "compliance_rules": "",
-                "unsafe_domains": "",
-                "denied_entities": []
-            })
+            settings_data.update(doc_snap.to_dict())
+            
+        rules_list = []
+        for doc in db.collection("rules").stream():
+            rule = doc.to_dict()
+            rule["id"] = doc.id
+            rules_list.append(rule)
+        settings_data["rules_list"] = rules_list
+        
+        employees = []
+        for doc in db.collection("users").stream():
+            user_data = doc.to_dict()
+            user_data["email"] = doc.id
+            employees.append(user_data)
+        settings_data["employees"] = employees
+        
+        return jsonify(settings_data)
     except Exception as e:
         logger.error("Failed to load settings", error=str(e))
         return jsonify({"error": str(e)}), 500
@@ -413,11 +527,18 @@ def save_settings():
 
     if not db:
         return jsonify({"error": "Firebase database not initialized"}), 500
+        
+    email = user.get("email", "").lower()
+    user_doc = db.collection("users").document(email).get()
+    if not user_doc.exists or not user_doc.to_dict().get("isAdmin"):
+         return jsonify({"error": "Forbidden: Admins only"}), 403
 
     data = request.json or {}
     unsafe_domains = data.get("unsafe_domains")
     compliance_rules = data.get("compliance_rules")
     denied_entities = data.get("denied_entities")
+    rules_list = data.get("rules_list")
+    employees = data.get("employees")
 
     update_payload = {}
     if unsafe_domains is not None:
@@ -426,10 +547,40 @@ def save_settings():
         update_payload["compliance_rules"] = compliance_rules
     if denied_entities is not None:
         update_payload["denied_entities"] = denied_entities
-
+        
     try:
-        doc_ref = db.collection("config").document("settings")
-        doc_ref.set(update_payload, merge=True)
+        if update_payload:
+            db.collection("config").document("settings").set(update_payload, merge=True)
+            
+        if rules_list is not None:
+            # Delete old rules not in the new list
+            new_rule_ids = [r.get("id") for r in rules_list if r.get("id")]
+            for doc in db.collection("rules").stream():
+                if doc.id not in new_rule_ids:
+                    db.collection("rules").document(doc.id).delete()
+                    
+            for rule in rules_list:
+                rule_id = rule.get("id") or str(int(time.time() * 1000))
+                rule["id"] = rule_id
+                db.collection("rules").document(rule_id).set(rule)
+                
+            formatted_rules = []
+            for i, r in enumerate(rules_list, 1):
+                title = r.get("title", "").strip()
+                rule_text = r.get("rule", "").strip()
+                if title and rule_text:
+                    formatted_rules.append(f"{i}. {title}: {rule_text}")
+                elif rule_text:
+                    formatted_rules.append(f"{i}. {rule_text}")
+            db.collection("config").document("settings").set({"compliance_rules": "\n".join(formatted_rules)}, merge=True)
+                
+        if employees is not None:
+            for emp in employees:
+                emp_email = emp.get("email", "").lower()
+                if emp_email:
+                    emp["isAdmin"] = False # ensure they are not admin
+                    db.collection("users").document(emp_email).set(emp, merge=True)
+
         return jsonify({"status": "success", "message": "Settings updated"})
     except Exception as e:
         logger.error("Failed to save settings", error=str(e))
@@ -473,12 +624,16 @@ def report_analytics_endpoint():
                 rule_triggers[clean_rule] = rule_triggers.get(clean_rule, 0) + 1
 
         if report_type in ["warning", "violation"]:
+            incident_id = str(int(time.time() * 1000))
             new_incident = {
-                "id": str(int(time.time() * 1000)),
+                "id": incident_id,
+                "email": email or "unknown@company.com",
                 "rule": rule or "Compliance policy trigger",
                 "severity": report_type,
                 "date": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
             }
+            db.collection("incidents").document(incident_id).set(new_incident)
+            
             recent_incidents = analytics_data.setdefault("recent_incidents", [])
             recent_incidents.insert(0, new_incident)
             if len(recent_incidents) > 10:
