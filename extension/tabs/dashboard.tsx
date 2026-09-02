@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
 import { useStorage } from "@plasmohq/storage/hook"
 import "../style.css"
+import { getBackendUrl } from "../utils/api"
 
 import bannerImg from "data-base64:../assets/banner_transparent.png"
 
@@ -53,7 +54,7 @@ export default function Dashboard() {
   const [ruleId, setRuleId] = useState("")
   const [ruleTitle, setRuleTitle] = useState("")
   const [ruleBody, setRuleBody] = useState("")
-  const [ruleAppliedTo, setRuleAppliedTo] = useState<"all" | string[]>("all")
+  const [ruleScope, setRuleScope] = useState<"all" | "engineering" | "finance" | "administrative" | string>("all")
   const [ruleExternalOnly, setRuleExternalOnly] = useState(false)
   const [ruleStatus, setRuleStatus] = useState<"active" | "inactive">("active")
   
@@ -100,9 +101,7 @@ export default function Dashboard() {
   const loadAnalytics = async () => {
     if (!user) return
     try {
-      const cleanHost = baseHost.replace(/\/$/, "")
-      const isLocal = cleanHost.includes("localhost") || cleanHost.includes("127.0.0.1") || !cleanHost.startsWith("http")
-      const analyticsUrl = isLocal ? `${cleanHost}:3000/api/analytics` : `${cleanHost}/api/analytics`
+      const analyticsUrl = await getBackendUrl("/api/analytics")
 
       const res = await fetch(analyticsUrl, {
         headers: {
@@ -130,9 +129,7 @@ export default function Dashboard() {
   const loadData = async () => {
     if (!user) return
     try {
-      const cleanHost = baseHost.replace(/\/$/, "")
-      const isLocal = cleanHost.includes("localhost") || cleanHost.includes("127.0.0.1") || !cleanHost.startsWith("http")
-      const configUrl = isLocal ? `${cleanHost}:3000/api/config/settings` : `${cleanHost}/api/config/settings`
+      const configUrl = await getBackendUrl("/api/config/settings")
 
       const res = await fetch(configUrl)
       
@@ -170,9 +167,7 @@ export default function Dashboard() {
   const handleLogin = async (e) => {
     e.preventDefault()
     try {
-      const cleanHost = baseHost.replace(/\/$/, "")
-      const isLocal = cleanHost.includes("localhost") || cleanHost.includes("127.0.0.1") || !cleanHost.startsWith("http")
-      const loginUrl = isLocal ? `${cleanHost}:3000/api/auth/login` : `${cleanHost}/api/auth/login`
+      const loginUrl = await getBackendUrl("/api/auth/login")
 
       const res = await fetch(loginUrl, {
         method: "POST",
@@ -202,9 +197,7 @@ export default function Dashboard() {
   const handleSave = async (updatedRulesList?: any[], updatedEmployees?: any[]) => {
     if (!user) return
     try {
-      const cleanHost = baseHost.replace(/\/$/, "")
-      const isLocal = cleanHost.includes("localhost") || cleanHost.includes("127.0.0.1") || !cleanHost.startsWith("http")
-      const configUrl = isLocal ? `${cleanHost}:3000/api/config/settings` : `${cleanHost}/api/config/settings`
+      const configUrl = await getBackendUrl("/api/config/settings")
 
       const rulesToSave = updatedRulesList !== undefined ? updatedRulesList : rulesList
       const employeesToSave = updatedEmployees !== undefined ? updatedEmployees : employees
@@ -249,7 +242,7 @@ export default function Dashboard() {
     setRuleId("")
     setRuleTitle("")
     setRuleBody("")
-    setRuleAppliedTo("all")
+    setRuleScope("all")
     setRuleExternalOnly(false)
     setRuleStatus("active")
     setView("create-rule")
@@ -259,7 +252,7 @@ export default function Dashboard() {
     setRuleId(rule.id)
     setRuleTitle(rule.title)
     setRuleBody(rule.rule)
-    setRuleAppliedTo(rule.appliedTo || "all")
+    setRuleScope(rule.scope || "all")
     setRuleExternalOnly(rule.externalOnly || false)
     setRuleStatus(rule.status || "active")
     setView("edit-rule")
@@ -277,7 +270,7 @@ export default function Dashboard() {
         ...r,
         title: ruleTitle,
         rule: ruleBody,
-        appliedTo: ruleAppliedTo,
+        scope: ruleScope,
         externalOnly: ruleExternalOnly,
         status: ruleStatus
       } : r)
@@ -286,7 +279,7 @@ export default function Dashboard() {
         id: Math.random().toString(36).substring(2, 9),
         title: ruleTitle,
         rule: ruleBody,
-        appliedTo: ruleAppliedTo,
+        scope: ruleScope,
         externalOnly: ruleExternalOnly,
         status: ruleStatus
       }
@@ -318,10 +311,6 @@ export default function Dashboard() {
     }
     const updatedEmployees = [...employees, newEmp]
     await handleSave(rulesList, updatedEmployees)
-    
-    if (Array.isArray(ruleAppliedTo) && !ruleAppliedTo.includes(newEmp.email)) {
-      setRuleAppliedTo([...ruleAppliedTo, newEmp.email])
-    }
 
     setNewEmployeeName("")
     setNewEmployeeEmail("")
@@ -330,8 +319,6 @@ export default function Dashboard() {
   }
 
   const renderRuleFormView = () => {
-    const isAllSelected = ruleAppliedTo === "all"
-    
     return (
       <div className={`theme-${appliedTheme}`} style={{ minHeight: "100vh", backgroundColor: "var(--color-bg-dark)", color: "var(--color-text-dark)", padding: "40px 20px" }}>
         <div style={{ maxWidth: 800, margin: "0 auto" }}>
@@ -437,195 +424,34 @@ export default function Dashboard() {
 
             <div style={{ position: "relative" }}>
               <label style={{ display: "block", fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
-                Applied To <span style={{ color: "var(--color-danger)" }}>*</span>
+                Rule Scope <span style={{ color: "var(--color-danger)" }}>*</span>
               </label>
               
-              <div 
-                onClick={() => setDropdownOpen(!dropdownOpen)}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
+              <select 
+                value={ruleScope}
+                onChange={e => setRuleScope(e.target.value)}
+                className="input-field"
+                style={{ 
+                  width: "100%",
                   padding: "14px 16px",
-                  borderRadius: dropdownOpen ? "8px 8px 0 0" : 8,
-                  border: "1px solid var(--color-border-dark)",
-                  borderBottom: dropdownOpen ? "none" : "1px solid var(--color-border-dark)",
-                  cursor: "pointer",
-                  backgroundColor: appliedTheme === "light" ? "#ffffff" : "#2c2c2e"
+                  fontSize: 14,
+                  appearance: "none",
+                  backgroundColor: appliedTheme === "light" ? "#ffffff" : "#2c2c2e",
+                  backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3Csvg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='${appliedTheme === 'light' ? '%23000' : '%23fff'}' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+                  backgroundRepeat: "no-repeat",
+                  backgroundPosition: "right 16px center",
+                  textTransform: "capitalize",
+                  cursor: "pointer"
                 }}
               >
-                <span style={{ fontSize: 14, opacity: 0.9 }}>
-                  Select who this rule applies to
-                </span>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ transform: dropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}>
-                  <polyline points="6 9 12 15 18 9"></polyline>
-                </svg>
-              </div>
-
-              {dropdownOpen && (
-                <div style={{
-                  position: "absolute",
-                  top: "100%",
-                  left: 0,
-                  right: 0,
-                  zIndex: 10,
-                  borderRadius: "0 0 8px 8px",
-                  border: "1px solid var(--color-border-dark)",
-                  borderTop: "1px solid rgba(0,0,0,0.05)",
-                  backgroundColor: appliedTheme === "light" ? "#ffffff" : "#1c1c1e",
-                  boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
-                  maxHeight: 360,
-                  overflowY: "auto",
-                  padding: "16px 20px"
-                }}>
-                  
-                  <label style={{ 
-                    display: "flex", 
-                    alignItems: "flex-start", 
-                    gap: 12, 
-                    cursor: "pointer",
-                    paddingBottom: 12,
-                    borderBottom: "1px solid var(--color-border-dark)",
-                    marginBottom: 16
-                  }}>
-                    <input 
-                      type="checkbox" 
-                      checked={isAllSelected}
-                      onChange={() => {
-                        if (isAllSelected) {
-                          setRuleAppliedTo([])
-                        } else {
-                          setRuleAppliedTo("all")
-                        }
-                      }}
-                      style={{ marginTop: 4, width: 16, height: 16, accentColor: "#0a58ca" }}
-                    />
-                    <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ opacity: 0.7, marginTop: 2 }}>
-                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                        <circle cx="9" cy="7" r="4" />
-                        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                      </svg>
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: 14 }}>All Employees</div>
-                        <div style={{ fontSize: 12, opacity: 0.6, marginTop: 2 }}>Apply this rule to everyone in the organization.</div>
-                      </div>
-                    </div>
-                  </label>
-
-                  <div style={{ marginBottom: 16 }}>
-                    <div style={{ fontWeight: 700, fontSize: 13, opacity: 0.8, marginBottom: 4 }}>Separate Employees</div>
-                    <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 12 }}>Apply this rule to specific employees.</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                      {employees.map(emp => {
-                        const isChecked = !isAllSelected && Array.isArray(ruleAppliedTo) && ruleAppliedTo.includes(emp.email)
-                        
-                        return (
-                          <label key={emp.email} style={{ display: "flex", alignItems: "flex-start", gap: 12, cursor: "pointer" }}>
-                            <input 
-                              type="checkbox" 
-                              disabled={isAllSelected}
-                              checked={isChecked}
-                              onChange={() => {
-                                if (isAllSelected) return
-                                const current = Array.isArray(ruleAppliedTo) ? ruleAppliedTo : []
-                                if (current.includes(emp.email)) {
-                                  setRuleAppliedTo(current.filter(email => email !== emp.email))
-                                } else {
-                                  setRuleAppliedTo([...current, emp.email])
-                                }
-                              }}
-                              style={{ width: 16, height: 16, accentColor: "#0a58ca", marginTop: 2 }}
-                            />
-                            <div style={{ display: "flex", gap: 10, alignItems: "flex-start", opacity: isAllSelected ? 0.4 : 1 }}>
-                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ opacity: 0.7, marginTop: 1 }}>
-                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                                <circle cx="12" cy="7" r="4"></circle>
-                              </svg>
-                              <div>
-                                <div style={{ fontWeight: 600, fontSize: 14 }}>{emp.name}</div>
-                                <div style={{ fontSize: 12, opacity: 0.6 }}>{emp.email}</div>
-                              </div>
-                            </div>
-                          </label>
-                        )
-                      })}
-                    </div>
-                  </div>
-
-                  {!showAddEmployeeForm ? (
-                    <button 
-                      onClick={() => setShowAddEmployeeForm(true)}
-                      style={{ 
-                        background: "none", 
-                        border: "none", 
-                        color: "var(--color-accent)", 
-                        cursor: "pointer", 
-                        fontSize: 13, 
-                        fontWeight: 600,
-                        padding: 0
-                      }}
-                    >
-                      + Add another employee
-                    </button>
-                  ) : (
-                    <div style={{ 
-                      marginTop: 12, 
-                      padding: 12, 
-                      border: "1px dashed var(--color-border-dark)", 
-                      borderRadius: 6,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 10 
-                    }}>
-                      <div style={{ fontSize: 12, fontWeight: 600 }}>New Employee Details</div>
-                      <input 
-                        type="text" 
-                        placeholder="Name" 
-                        className="input-field" 
-                        value={newEmployeeName}
-                        onChange={e => setNewEmployeeName(e.target.value)}
-                        style={{ padding: "6px 10px", fontSize: 13 }}
-                      />
-                      <input 
-                        type="email" 
-                        placeholder="Email" 
-                        className="input-field" 
-                        value={newEmployeeEmail}
-                        onChange={e => setNewEmployeeEmail(e.target.value)}
-                        style={{ padding: "6px 10px", fontSize: 13 }}
-                      />
-                      <input 
-                        type="text" 
-                        placeholder="Role (e.g. Sales)" 
-                        className="input-field" 
-                        value={newEmployeeRole}
-                        onChange={e => setNewEmployeeRole(e.target.value)}
-                        style={{ padding: "6px 10px", fontSize: 13 }}
-                      />
-                      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                        <button 
-                          onClick={() => setShowAddEmployeeForm(false)}
-                          className="btn" 
-                          style={{ padding: "4px 8px", fontSize: 12, backgroundColor: "transparent", border: "1px solid var(--color-border-dark)" }}
-                        >
-                          Cancel
-                        </button>
-                        <button 
-                          onClick={handleAddEmployee}
-                          className="btn btn-success" 
-                          style={{ padding: "4px 10px", fontSize: 12 }}
-                        >
-                          Add
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                </div>
-              )}
+                <option value="all">All Groups</option>
+                <option value="engineering">Engineering</option>
+                <option value="finance">Finance</option>
+                <option value="administrative">Administrative</option>
+              </select>
             </div>
+
+
 
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ fontWeight: 600, fontSize: 14, display: "flex", alignItems: "center", gap: 6 }}>
@@ -999,19 +825,8 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   rulesList.map((r, index) => {
-                    const isAll = r.appliedTo === "all"
-                    let appliedText = "All Employees"
-                    if (!isAll && Array.isArray(r.appliedTo)) {
-                      const names = r.appliedTo.map((email: string) => {
-                        const emp = employees.find(e => e.email === email)
-                        return emp ? emp.name : email
-                      })
-                      if (names.length <= 2) {
-                        appliedText = names.join(", ")
-                      } else {
-                        appliedText = names.slice(0, 2).join(", ") + ` +${names.length - 2}`
-                      }
-                    }
+                    const isAll = r.scope === "all" || !r.scope
+                    let appliedText = r.scope === "all" || !r.scope ? "All Groups" : r.scope
 
                     return (
                       <div 
@@ -1038,25 +853,13 @@ export default function Dashboard() {
                                 <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
                                 <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                               </svg>
-                              All Employees
+                              All Groups
                             </span>
                           ) : (
                             <div style={{ display: "flex", alignItems: "center", gap: 8, overflow: "hidden" }}>
-                              <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={appliedText}>
-                                {appliedText.split(" +")[0]}
+                              <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textTransform: "capitalize" }} title={appliedText}>
+                                {appliedText}
                               </span>
-                              {appliedText.includes(" +") && (
-                                <span style={{ 
-                                  backgroundColor: "rgba(0,0,0,0.05)", 
-                                  padding: "2px 6px", 
-                                  borderRadius: 12, 
-                                  fontSize: 11,
-                                  fontWeight: 600,
-                                  flexShrink: 0 
-                                }}>
-                                  +{appliedText.split(" +")[1]}
-                                </span>
-                              )}
                             </div>
                           )}
                         </div>

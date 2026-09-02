@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 # Initialize Firebase Admin
 # Make sure to set the GOOGLE_APPLICATION_CREDENTIALS environment variable 
 # or provide the path to your service account key file here.
-CREDENTIALS_PATH = os.path.join(os.path.dirname(__file__), 'serviceAccountKey.json')
+CREDENTIALS_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'serviceAccountKey.json')
 
 try:
     cred = credentials.Certificate(CREDENTIALS_PATH)
@@ -32,7 +32,7 @@ def seed_users():
             "data": {
                 "email": "admin@saferail.ai",
                 "name": "System Admin",
-                "role": "Administrator",
+                "role": "administrative",
                 "isAdmin": True
             }
         },
@@ -41,7 +41,7 @@ def seed_users():
             "data": {
                 "email": "alice.johnson@company.com",
                 "name": "Alice Johnson",
-                "role": "Sales",
+                "role": "finance",
                 "isAdmin": False
             }
         },
@@ -50,7 +50,7 @@ def seed_users():
             "data": {
                 "email": "bob.smith@company.com",
                 "name": "Bob Smith",
-                "role": "Engineering",
+                "role": "engineering",
                 "isAdmin": False
             }
         }
@@ -66,33 +66,133 @@ def seed_rules():
     
     sample_rules = [
         {
-            "id": "rule_mergers_acquisitions",
+            "id": "rule_financial_returns",
             "data": {
-                "title": "M&A discussion",
-                "rule": "Flag any mention of unannounced mergers, acquisitions, or IPOs.",
+                "title": "Financial Returns",
+                "rule": 'No promises of specific financial returns (e.g., "guaranteed 10%").',
                 "status": "active",
-                "externalOnly": True,
-                "appliedTo": "all"
+                "externalOnly": False,
+                "scope": "all"
             }
         },
         {
-            "id": "rule_financial_metrics",
+            "id": "rule_absolute_terms",
             "data": {
-                "title": "Quarterly Financials",
-                "rule": "Block sending of quarterly financial metrics before official public release.",
+                "title": "Absolute Terms",
+                "rule": 'Do not use absolute terms like "best," "perfect," or "safest" without a citation.',
                 "status": "active",
-                "externalOnly": True,
-                "appliedTo": ["alice.johnson@company.com"]
+                "externalOnly": False,
+                "scope": "all"
             }
         },
         {
-            "id": "rule_source_code",
+            "id": "rule_capital_at_risk",
             "data": {
-                "title": "Source Code Sharing",
-                "rule": "Prevent sending proprietary source code or system architecture diagrams outside the company.",
+                "title": "Capital at Risk",
+                "rule": 'Must include the disclaimer "Capital at risk" when mentioning investments.',
                 "status": "active",
-                "externalOnly": True,
-                "appliedTo": ["bob.smith@company.com"]
+                "externalOnly": False,
+                "scope": "all"
+            }
+        },
+        {
+            "id": "rule_competitor_names",
+            "data": {
+                "title": "Competitor Names",
+                "rule": 'No mention of competitor names in a negative light.',
+                "status": "active",
+                "externalOnly": False,
+                "scope": "all"
+            }
+        },
+        {
+            "id": "rule_date_format",
+            "data": {
+                "title": "Date Format",
+                "rule": 'All dates must be in DD/MM/YYYY format.',
+                "status": "active",
+                "externalOnly": False,
+                "scope": "all"
+            }
+        },
+        {
+            "id": "rule_personal_data",
+            "data": {
+                "title": "Personal Data Leakage",
+                "rule": 'No disguised personal data leakages, explicit and inexplicit.',
+                "status": "active",
+                "externalOnly": False,
+                "scope": "all"
+            }
+        },
+        {
+            "id": "rule_financial_accounts",
+            "data": {
+                "title": "Personal Financial Accounts",
+                "rule": 'No mention of personal financial accounts',
+                "status": "active",
+                "externalOnly": False,
+                "scope": "administrative"
+            }
+        },
+        {
+            "id": "rule_splitting_contracts",
+            "data": {
+                "title": "Threshold Splitting",
+                "rule": 'Trigger when the email suggests splitting contracts, purchase orders, scopes, or invoices to avoid approval, Legal review, signing thresholds, or procurement process.',
+                "status": "active",
+                "externalOnly": False,
+                "scope": "all"
+            }
+        },
+        {
+            "id": "rule_four_eye_principle",
+            "data": {
+                "title": "Four-Eye Principle",
+                "rule": 'Four-eye principle for commitments above EUR 5,000',
+                "status": "active",
+                "externalOnly": False,
+                "scope": "finance"
+            }
+        },
+        {
+            "id": "rule_commitments_5000",
+            "data": {
+                "title": "Commitments above 5k",
+                "rule": 'Trigger when the email appears to approve, accept, order, renew, amend, or commit to something with a value above EUR 5,000, and there is no clear authorized countersigner in cc',
+                "status": "active",
+                "externalOnly": False,
+                "scope": "all"
+            }
+        },
+        {
+            "id": "rule_legal_review",
+            "data": {
+                "title": "Legal Review 150k",
+                "rule": 'Legal review trigger above EUR 150,000 or high-risk contract type',
+                "status": "active",
+                "externalOnly": False,
+                "scope": "all"
+            }
+        },
+        {
+            "id": "rule_contract_150000",
+            "data": {
+                "title": "Contract Value above 150k",
+                "rule": 'Trigger when the email appears to send, approve, sign, accept, renew, amend, or negotiate a contract with total value above EUR 150,000, or when the email involves legal-review triggers such as personal data processing or uncertain clauses.',
+                "status": "active",
+                "externalOnly": False,
+                "scope": "engineering"
+            }
+        },
+        {
+            "id": "rule_circumvention",
+            "data": {
+                "title": "Circumvention Language",
+                "rule": 'Circumvention or threshold-splitting language',
+                "status": "active",
+                "externalOnly": False,
+                "scope": "all"
             }
         }
     ]
