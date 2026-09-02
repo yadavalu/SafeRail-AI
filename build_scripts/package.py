@@ -87,7 +87,6 @@ def package_server():
         "Modelfile",
         "start_server.bat",
         "start_server.sh",
-        "Makefile"
     ]
 
     for f in src_files_to_copy:

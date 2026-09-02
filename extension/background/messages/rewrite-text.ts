@@ -1,6 +1,7 @@
 import type { PlasmoMessaging } from "@plasmohq/messaging"
 import { Storage } from "@plasmohq/storage"
 import { reportAnalytics } from "./check-text"
+import { getBackendUrl } from "../../utils/api"
 
 const storage = new Storage()
 const MODEL_NAME = "saferail-llama"
@@ -16,35 +17,42 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
 
   try {
     const modelType = await storage.get("modelType") || "gemini"
-    const endpoint = await storage.get("ollamaEndpoint") || (modelType === "gemini" ? "https://llm.safeseal.xyz/gemini/chat" : DEFAULT_OLLAMA)
+    const endpoint = await getBackendUrl("/api/analyze/llm")
+
+    const user = await storage.get("adminUser") as any
+    if (!user || !user.token) {
+      throw new Error("User not authenticated. Please log in through the SafeRail dashboard.");
+    }
 
     const response = await fetch(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${user.token}`
+      },
       body: JSON.stringify({
-        model: modelType === "llama" ? MODEL_NAME : "gemini-1.5-flash",
-        stream: false,
+        provider: modelType,
         messages: [
           { role: "user", content: `REWRITE: ${text}` }
         ],
       })
     }).catch(e => {
-        throw new Error("LLM_SERVER_DOWN");
+      throw new Error("LLM_SERVER_DOWN");
     });
 
     if (!response.ok) {
-        let errorMsg = response.statusText;
-        try {
-            const errorData = await response.json();
-            if (errorData && errorData.error) errorMsg = errorData.error;
-        } catch (e) {}
-        throw new Error(`LLM server error: ${errorMsg || response.status}`);
+      let errorMsg = response.statusText;
+      try {
+        const errorData = await response.json();
+        if (errorData && errorData.error) errorMsg = errorData.error;
+      } catch (e) { }
+      throw new Error(`LLM server error: ${errorMsg || response.status}`);
     }
-    
+
     const data = await response.json()
-    
+
     if (!data.message || !data.message.content) {
-        throw new Error("Invalid response from LLM server");
+      throw new Error("Invalid response from LLM server");
     }
 
     const rewrittenText = data.message.content.trim()

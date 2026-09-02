@@ -93,6 +93,11 @@ CORS(app)
 SPACY_MODEL = "en_core_web_lg"
 BASE_MODEL = "llama3.1:8b-instruct-q4_K_M"
 OLLAMA_MODEL = "saferail-llama"
+POLICY_CACHE = {}
+USER_GROUP_CACHE = {}
+
+VALID_GROUPS = ["engineering", "finance", "administrative"]
+GROUP_MODELS = {g: f"saferail-{g}" for g in VALID_GROUPS}
 
 def get_system_prompt(rules_content):
     ##### Backup #####
@@ -140,36 +145,21 @@ def is_recipient_external(sender_email, recipient_emails):
         pass
     return False
 
-def get_compliance_rules_for_context(sender_email=None, recipient_emails=None):
+def get_effective_rules(group):
     if not db:
         return get_compliance_rules()
     try:
-        sender_role = None
-        if sender_email:
-            user_doc = db.collection("users").document(sender_email.lower()).get()
-            if user_doc.exists:
-                sender_role = user_doc.to_dict().get("role")
-
         rules_ref = db.collection("rules").stream()
         filtered_rules = []
-        is_external = is_recipient_external(sender_email, recipient_emails) if (sender_email and recipient_emails) else False
         
         for r_doc in rules_ref:
             r = r_doc.to_dict()
             if r.get("status") == "inactive":
                 continue
-            
-            # Check externalOnly
-            if r.get("externalOnly", False) and not is_external:
-                continue
                 
-            # Check email
-            applied_emails = r.get("appliedTo", [])
-            if applied_emails and isinstance(applied_emails, str) and applied_emails == "all":
-                pass
-            elif applied_emails and "all" not in [em.lower() for em in applied_emails]:
-                if not sender_email or sender_email.lower() not in [em.lower() for em in applied_emails]:
-                    continue
+            scope = r.get("scope", "all").lower()
+            if scope != "all" and scope != group:
+                continue
             
             title = r.get("title", "").strip()
             rule_text = r.get("rule", "").strip()
@@ -214,33 +204,36 @@ def ensure_spacy_model():
         subprocess.check_call([sys.executable, "-m", "spacy", "download", SPACY_MODEL])
         logger.info("SpaCy model downloaded successfully", model=SPACY_MODEL)
 
+def update_policy_caches():
+    """Updates the in-memory cache for all groups."""
+    for group in VALID_GROUPS:
+        rules_content = get_effective_rules(group)
+        system_prompt = get_system_prompt(rules_content)
+        POLICY_CACHE[group] = system_prompt
+        logger.info(f"Updated policy cache for group {group}")
+
 def ensure_ollama_model():
-    """Checks if the Ollama model is available and synchronizes it."""
-    logger.info("Checking for Ollama model", model=OLLAMA_MODEL)
+    """Checks if the Ollama model is available and synchronizes it for all groups."""
+    logger.info("Checking for Ollama models")
     try:
         subprocess.run(["ollama", "--version"], check=True, capture_output=True)
-        rules_content = get_compliance_rules()
-        system_prompt = get_system_prompt(rules_content)
         
-        modelfile_content = f"""FROM {BASE_MODEL}
-PARAMETER num_ctx 4096
-PARAMETER temperature 0
-PARAMETER num_predict 512
-PARAMETER top_k 10
-PARAMETER top_p 0.5
-
-SYSTEM \"\"\"{system_prompt}\"\"\"
-"""
-        with open("Modelfile", "w") as f:
-            f.write(modelfile_content)
+        update_policy_caches()
         
-        subprocess.run(["ollama", "create", OLLAMA_MODEL, "-f", "Modelfile"], check=True)
-        logger.info("Custom model synchronized successfully", model=OLLAMA_MODEL)
+        for group in VALID_GROUPS:
+            model_name = GROUP_MODELS[group]
+            system_prompt = POLICY_CACHE.get(group, get_system_prompt(get_compliance_rules()))
+            
+            modelfile_content = f"""FROM {BASE_MODEL}\nPARAMETER num_ctx 4096\nPARAMETER temperature 0\nPARAMETER num_predict 512\nPARAMETER top_k 10\nPARAMETER top_p 0.5\n\nSYSTEM \"\"\"{system_prompt}\"\"\"\n"""
+            with open(f"Modelfile_{group}", "w") as f:
+                f.write(modelfile_content)
+            
+            subprocess.run(["ollama", "create", model_name, "-f", f"Modelfile_{group}"], check=True)
+            logger.info(f"Custom model synchronized successfully", model=model_name)
     except Exception as e:
         logger.warning("Ollama setup failed", error=str(e))
 
 ensure_spacy_model()
-ensure_ollama_model()
 analyzer = AnalyzerEngine()
 
 def kill_existing_ollama():
@@ -259,6 +252,8 @@ def start_ollama():
         os.environ["OLLAMA_ORIGINS"] = "*"
         os.environ["OLLAMA_HOST"] = "0.0.0.0"
         subprocess.Popen(["ollama", "serve"], env=os.environ, shell=False)
+        time.sleep(3)
+        ensure_ollama_model()
     except Exception as e:
         logger.error("Failed to start Ollama", error=str(e))
 
@@ -270,35 +265,64 @@ def health_check():
         "endpoints": ["/analyze", "/gemini/chat"]
     })
 
-@app.route("/gemini/chat", methods=["POST"])
-def gemini_chat():
-    if not GEMINI_API_KEY:
-        return jsonify({"error": "Gemini API key not configured in .env"}), 500
+@app.route("/api/analyze/llm", methods=["POST"])
+def analyze_llm():
+    user = get_authenticated_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+        
+    email = user.get("email", "").lower()
+    group = "engineering" # default
+    if email in USER_GROUP_CACHE:
+        group = USER_GROUP_CACHE[email]
+    else:
+        if db:
+            user_doc = db.collection("users").document(email).get()
+            if user_doc.exists:
+                group = user_doc.to_dict().get("role", "engineering").lower()
+                USER_GROUP_CACHE[email] = group
+
     data = request.json
     messages = data.get("messages", [])
     if not messages: return jsonify({"error": "No messages"}), 400
     user_input = messages[-1]["content"]
     
-    sender_email = data.get("senderEmail")
-    recipient_emails = data.get("recipientEmails", [])
+    provider = data.get("provider", "gemini")
     
     try:
-        rules_content = get_compliance_rules_for_context(sender_email, recipient_emails)
-        model = genai.GenerativeModel('gemini-2.5-flash', system_instruction=get_system_prompt(rules_content))
-        response = model.generate_content(user_input)
-        
-        # Check if the response was blocked by safety filters
-        if response.prompt_feedback and response.prompt_feedback.block_reason:
-             return jsonify({"error": f"Gemini blocked the request: {response.prompt_feedback.block_reason}"}), 400
-        
-        try:
-            return jsonify({"message": {"content": response.text}})
-        except ValueError:
-            # If response.text fails, it usually means it was blocked or empty
-            return jsonify({"error": "Gemini returned an empty or blocked response."}), 400
+        if provider == "gemini":
+            if not GEMINI_API_KEY:
+                return jsonify({"error": "Gemini API key not configured in .env"}), 500
+                
+            system_prompt = POLICY_CACHE.get(group)
+            if not system_prompt:
+                system_prompt = get_system_prompt(get_effective_rules(group))
+                
+            model = genai.GenerativeModel('gemini-2.5-flash', system_instruction=system_prompt)
+            response = model.generate_content(user_input)
             
+            if response.prompt_feedback and response.prompt_feedback.block_reason:
+                 return jsonify({"error": f"Gemini blocked the request: {response.prompt_feedback.block_reason}"}), 400
+            
+            try:
+                return jsonify({"message": {"content": response.text}})
+            except ValueError:
+                return jsonify({"error": "Gemini returned an empty or blocked response."}), 400
+        else:
+            # Ollama
+            model_name = GROUP_MODELS.get(group, "saferail-llama")
+            ollama_url = "http://127.0.0.1:11434/api/chat"
+            payload = {
+                "model": model_name,
+                "messages": messages,
+                "stream": False,
+                "format": "json"
+            }
+            res = requests.post(ollama_url, json=payload)
+            return jsonify(res.json()), res.status_code
+
     except Exception as e:
-        logger.error("Gemini API error", error=str(e))
+        logger.error("LLM Inference error", error=str(e))
         return jsonify({"error": str(e)}), 500
 
 @app.route("/analyze", methods=["POST"])
@@ -463,9 +487,20 @@ def get_analytics():
                 analytics_data.update(doc_snap.to_dict())
                 
             incidents_ref = db.collection("incidents").stream()
-            recent_incidents = [doc.to_dict() for doc in incidents_ref]
-            recent_incidents.sort(key=lambda x: x.get("date", ""), reverse=True)
-            analytics_data["recent_incidents"] = recent_incidents[:10]
+            incidents = [doc.to_dict() for doc in incidents_ref]
+            incidents.sort(key=lambda x: x.get("date", ""), reverse=True)
+            
+            analytics_data["warning"] = 0
+            analytics_data["violation"] = 0
+            analytics_data["confidential"] = 0
+            
+            for inc in incidents:
+                severity = inc.get("severity")
+                if severity == "warning": analytics_data["warning"] += 1
+                elif severity == "violation": analytics_data["violation"] += 1
+                elif severity == "confidential": analytics_data["confidential"] += 1
+                
+            analytics_data["recent_incidents"] = incidents[:10]
         else:
             incidents_ref = db.collection("incidents").where("email", "==", email).stream()
             incidents = [doc.to_dict() for doc in incidents_ref]
@@ -590,6 +625,9 @@ def save_settings():
                 if emp_email:
                     emp["isAdmin"] = False # ensure they are not admin
                     db.collection("users").document(emp_email).set(emp, merge=True)
+                    
+        # Update caches and Ollama models asynchronously
+        threading.Thread(target=ensure_ollama_model).start()
 
         return jsonify({"status": "success", "message": "Settings updated"})
     except Exception as e:
