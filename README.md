@@ -34,18 +34,26 @@ The backend handles PII analysis (Presidio) and coordinates the custom Llama mod
     - Place `serviceAccountKey.json` in the root directory. This allows the backend to sync compliance rules from Firestore.
 4.  **Run Server**:
     ```bash
-    python server.py
+    cd scripts
+    .\start_server.sh
+    ```
+5.  **Start Tunnel (optional)**:
+    ```bash
+    cd scripts
+    ./start_tunnel.sh
     ```
 
 
 ### 2. Build
 To build easily on Windows
 ```ps
+cd build_scripts
 .\Build_Release.bat
 ```
 
 Likewise, on Linux or MacOS
 ```bash
+cd build_scripts
 chmod 777 ./build_release.sh
 ./build_release.sh
 ```

@@ -1,7 +1,7 @@
 # SafeRail.AI Backend Makefile
 
 PYTHON := $(shell command -v python3 2> /dev/null || command -v python 2> /dev/null)
-VENV := venv
+VENV := scripts/venv
 BIN := $(VENV)/bin
 
 ifeq ($(OS),Windows_NT)
@@ -17,9 +17,9 @@ all: setup run
 
 setup: $(VENV)/.setup_done
 
-$(VENV)/.setup_done: requirements.txt setup.py
+$(VENV)/.setup_done: requirements.txt scripts/setup.py
 	@echo "[INFO] Running environment setup..."
-	@$(PYTHON) setup.py
+	@cd scripts && $(PYTHON) setup.py
 	@touch $(VENV)/.setup_done
 
 run: setup
@@ -27,7 +27,7 @@ run: setup
 	@ollama serve > ollama.log 2>&1 &
 	@echo "[INFO] Starting SafeRail Backend..."
 	@if [ -f "$(PYTHON_VENV)" ]; then \
-		$(PYTHON_VENV) server.py; \
+		cd scripts && ../$(PYTHON_VENV) server.py; \
 	else \
 		echo "[ERROR] Virtual environment not found. Setup may have failed."; \
 		exit 1; \
@@ -36,3 +36,4 @@ run: setup
 clean:
 	rm -rf $(VENV)
 	rm -f Modelfile
+	rm -f scripts/Modelfile
