@@ -14,6 +14,12 @@ Evaluate or Rewrite text based on the following compliance RULESET:
 5. All dates must be in DD/MM/YYYY format.
 6. No disguised personal data leakages, explicit and inexplicit.
 7. No mention of personal financial accounts
+8. Four-eye principle for commitments above EUR 5,000
+9. Trigger when the email appears to approve, accept, order, renew, amend, or commit to something with a value above EUR 5,000, and there is no clear authorized countersigner in cc 
+10. Legal review trigger above EUR 150,000 or high-risk contract type
+11. Trigger when the email appears to send, approve, sign, accept, renew, amend, or negotiate a contract with total value above EUR 150,000, or when the email involves legal-review triggers such as personal data processing or uncertain clauses.
+12. Circumvention or threshold-splitting language
+13. Trigger when the email suggests splitting contracts, purchase orders, scopes, or invoices to avoid approval, Legal review, signing thresholds, or procurement process.
 
 INSTRUCTIONS:
 1. Analyze the INPUT_TEXT line-by-line.
