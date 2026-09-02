@@ -1,27 +1,31 @@
-# Dev server
+# Production server
 
-tunnel: 6fc591ff-9e0e-45e8-a352-d060e561666f
-credentials-file: C:\Users\User\.cloudflared\6fc591ff-9e0e-45e8-a352-d060e561666f.json
+tunnel: 6ca55e40-6c7b-4b6e-bbb7-9aab73bab588
+credentials-file: C:\Users\User\.cloudflared\6ca55e40-6c7b-4b6e-bbb7-9aab73bab588.json
+
+# THE FIX:
+protocol: http2
+dns-resolver-upstream: 1.1.1.1
 
 ingress:
   # Route Gemini API traffic
-  - hostname: dev.safeseal.xyz
+  - hostname: llm.safeseal.xyz
     path: ^/gemini/.*
-    service: http://localhost:3000
+    service: http://127.0.0.1:3000
 
   # Route SafeRail Backend Auth & Config APIs
-  - hostname: dev.safeseal.xyz
-    path: ^/api/(auth|config|analytics)/?.*
-    service: http://localhost:3000
+  - hostname: llm.safeseal.xyz
+    path: ^/api/(auth|config|analytics|analyze)/?.*
+    service: http://127.0.0.1:3000
 
   # Route Ollama API traffic
-  - hostname: dev.safeseal.xyz
+  - hostname: llm.safeseal.xyz
     path: ^/api/.*
-    service: http://localhost:11434
+    service: http://127.0.0.1:11434
 
   # Route Presidio / Health check traffic
-  - hostname: dev.safeseal.xyz
-    service: http://localhost:3000
+  - hostname: llm.safeseal.xyz
+    service: http://127.0.0.1:3000
 
   # Catch-all 404
   - service: http_status:404

@@ -141,15 +141,15 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
   try {
     const modelType = await storage.get("modelType") || "gemini"
     const endpoint = await getBackendUrl("/api/analyze/llm")
-    
+
     const user = await storage.get("adminUser") as any
     if (!user || !user.token) {
-        throw new Error("User not authenticated. Please log in through the SafeRail dashboard.");
+      throw new Error("User not authenticated. Please log in through the SafeRail dashboard.");
     }
 
     const response = await fetch(endpoint, {
       method: "POST",
-      headers: { 
+      headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${user.token}`
       },
