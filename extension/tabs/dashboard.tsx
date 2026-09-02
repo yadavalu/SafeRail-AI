@@ -605,7 +605,7 @@ export default function Dashboard() {
               filter: appliedTheme === "dark" ? "invert(1)" : "none"
             }}
           />
-          <h1 style={{ marginBottom: 30, fontSize: 24, fontWeight: 800, color: appliedTheme === "light" ? "#000000" : "#ffffff" }}>Admin Login</h1>
+          <h1 style={{ marginBottom: 30, fontSize: 24, fontWeight: 800, color: appliedTheme === "light" ? "#000000" : "#ffffff" }}>Dashboard login</h1>
           <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <input
               type="email"

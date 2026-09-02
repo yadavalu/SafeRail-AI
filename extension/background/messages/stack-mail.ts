@@ -186,7 +186,7 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
       await storage.set("stackedMails", currentQueue)
     }
 
-    res.send({ status: "error", explanation: `ERROR: ${msg}`, highlight: null })
+    res.send({ status: "error", explanation: `${msg}`, highlight: null })
   }
 }
 

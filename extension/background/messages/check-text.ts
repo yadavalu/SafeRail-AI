@@ -133,7 +133,7 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
       return
     }
   } catch (error: any) {
-    res.send({ status: "grey", explanation: `ERROR: ${error.message}`, confidential: false });
+    res.send({ status: "grey", explanation: `${error.message}`, confidential: false });
     return;
   }
 
@@ -216,10 +216,10 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
       confidential: false
     })
 
-  } catch (error) {
-    let msg = error.message;
+  } catch (error: any) {
+    let msg = error instanceof Error ? error.message : (error.message || "Unknown error occurred");
     if (msg === "LLM_SERVER_DOWN") msg = "LLM Server (Ollama) is down. Please ensure Ollama is running.";
-    res.send({ status: "grey", explanation: `ERROR: ${msg}`, confidential: false })
+    res.send({ status: "grey", explanation: `${msg}`, confidential: false })
   }
 }
 
