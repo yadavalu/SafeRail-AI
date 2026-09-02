@@ -1,6 +1,7 @@
 import { useStorage } from "@plasmohq/storage/hook"
 import { useState, useEffect } from "react"
 import "./style.css"
+import { getBackendUrl } from "./utils/api"
 import bannerImg from "data-base64:./assets/banner_transparent.png"
 
 function IndexPopup() {
@@ -81,19 +82,16 @@ function IndexPopup() {
     updateEndpoints(baseHost, newModel)
   }
 
-  const updateEndpoints = (host: string, model: string) => {
-    const isLocal = host.includes("localhost") || host.includes("127.0.0.1") || !host.startsWith("http")
-    const cleanHost = host.replace(/\/$/, "")
-
+  const updateEndpoints = async (host: string, model: string) => {
     if (model === "gemini") {
-      const targetPath = isLocal ? `${cleanHost}:3000/gemini/chat` : `${cleanHost}/gemini/chat`
+      const targetPath = await getBackendUrl("/gemini/chat")
       setOllamaEndpoint(targetPath)
     } else {
-      const targetPath = isLocal ? `${cleanHost}:11434/api/chat` : `${cleanHost}/api/chat`
+      const targetPath = await getBackendUrl("/api/chat")
       setOllamaEndpoint(targetPath)
     }
 
-    const presidioPath = isLocal ? `${cleanHost}:3000/analyze` : `${cleanHost}/analyze`
+    const presidioPath = await getBackendUrl("/analyze")
     setPresidioEndpoint(presidioPath)
   }
 

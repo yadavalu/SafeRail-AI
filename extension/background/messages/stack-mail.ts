@@ -1,6 +1,7 @@
 import type { PlasmoMessaging } from "@plasmohq/messaging"
 import { Storage } from "@plasmohq/storage"
-import { checkConfidentiality, reportAnalytics, matchRule } from "./check-text"
+import { checkConfidentiality, matchRule, reportAnalytics } from "./check-text"
+import { getBackendUrl } from "../../utils/api"
 
 const storage = new Storage()
 const MODEL_NAME = "saferail-llama"
@@ -68,10 +69,7 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
 
     // 3. RUN LLM CHECK (Only if not already flagged by Presidio)
     if (finalStatus === "green") {
-      const baseHost = await storage.get("baseHost") || "https://llm.safeseal.xyz"
-      const cleanHost = baseHost.replace(/\/$/, "")
-      const isLocal = cleanHost.includes("localhost") || cleanHost.includes("127.0.0.1") || !cleanHost.startsWith("http")
-      const geminiEndpoint = isLocal ? `${cleanHost}:3000/gemini/chat` : `${cleanHost}/gemini/chat`
+      const geminiEndpoint = await getBackendUrl("/gemini/chat")
       const endpoint = await storage.get("ollamaEndpoint") || (modelType === "gemini" ? geminiEndpoint : DEFAULT_OLLAMA)
       
       const response = await fetch(endpoint, {
@@ -141,10 +139,7 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
       }
 
       // Notify the backend and send/simulate the blocked email
-      const baseHost = await storage.get("baseHost") || "https://llm.safeseal.xyz"
-      const cleanHost = baseHost.replace(/\/$/, "")
-      const isLocal = cleanHost.includes("localhost") || cleanHost.includes("127.0.0.1") || !cleanHost.startsWith("http")
-      const backendUrl = isLocal ? `${cleanHost}:3000/send-blocked-email` : `${cleanHost}/send-blocked-email`
+      const backendUrl = await getBackendUrl("/send-blocked-email")
 
       try {
         const notifyRes = await fetch(backendUrl, {
