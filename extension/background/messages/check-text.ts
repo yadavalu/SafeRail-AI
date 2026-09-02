@@ -13,12 +13,14 @@ const DEFAULT_PRESIDIO = "https://llm.safeseal.xyz/analyze"
 // --- ANALYTICS ---
 export const reportAnalytics = async (type: "scanned" | "warning" | "violation" | "confidential", rule?: string, email?: string) => {
   try {
+    const user = await storage.get("adminUser") as any
+    const userEmail = (user && user.email) || email || "unknown@company.com"
     const backendUrl = await getBackendUrl("/api/analytics/report")
 
     const response = await fetch(backendUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type, rule, email })
+      body: JSON.stringify({ type, rule, email: userEmail })
     })
     if (!response.ok) {
       console.error("Failed to report analytics to backend:", response.statusText)
