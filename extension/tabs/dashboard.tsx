@@ -36,13 +36,7 @@ type Analytics = {
 export default function Dashboard() {
   const [theme] = useStorage("theme", "system")
   const [baseHost] = useStorage("baseHost", "https://llm.safeseal.xyz")
-  const [user, setUser] = useState<{ email: string; token: string } | null>(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("adminUser")
-      return stored ? JSON.parse(stored) : null
-    }
-    return null
-  })
+  const [user, setUser] = useStorage<{ email: string; token: string; isAdmin?: boolean; role?: string; name?: string } | null>("adminUser", null)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [expandedIncidentId, setExpandedIncidentId] = useState<string | null>(null)
@@ -50,6 +44,28 @@ export default function Dashboard() {
   const [unsafeDomains, setUnsafeDomains] = useState("")
   const [complianceRules, setComplianceRules] = useState("")
   const [deniedEntities, setDeniedEntities] = useState<string[]>([])
+  
+  const [view, setView] = useState<"dashboard" | "create-rule" | "edit-rule">("dashboard")
+  const [rulesList, setRulesList] = useState<any[]>([])
+  const [employees, setEmployees] = useState<any[]>([])
+  
+  // Create / Edit rule form state
+  const [ruleId, setRuleId] = useState("")
+  const [ruleTitle, setRuleTitle] = useState("")
+  const [ruleBody, setRuleBody] = useState("")
+  const [ruleAppliedTo, setRuleAppliedTo] = useState<"all" | string[]>("all")
+  const [ruleExternalOnly, setRuleExternalOnly] = useState(false)
+  const [ruleStatus, setRuleStatus] = useState<"active" | "inactive">("active")
+  
+  // Dropdown open state
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  
+  // New employee form state
+  const [showAddEmployeeForm, setShowAddEmployeeForm] = useState(false)
+  const [newEmployeeName, setNewEmployeeName] = useState("")
+  const [newEmployeeEmail, setNewEmployeeEmail] = useState("")
+  const [newEmployeeRole, setNewEmployeeRole] = useState("")
+
   const [analytics, setAnalytics] = useState<Analytics>({
     scanned: 0,
     warning: 0,
@@ -133,6 +149,18 @@ export default function Dashboard() {
         setUnsafeDomains(data.unsafe_domains || "")
         setComplianceRules(data.compliance_rules || "")
         setDeniedEntities(data.denied_entities || [])
+        setRulesList(data.rules_list || [])
+        
+        const defaultEmployees = [
+          { name: "Alicia Johnson", email: "alicia.johnson@company.com" },
+          { name: "Michael Chen", email: "michael.chen@company.com" },
+          { name: "Sarah Williams", email: "sarah.williams@company.com" },
+          { name: "David Kim", email: "david.kim@company.com" },
+          { name: "Priya Patel", email: "priya.patel@company.com" },
+          { name: "James Thompson", email: "james.thompson@company.com" }
+        ]
+        const loadedEmployees = data.employees && data.employees.length > 0 ? data.employees : defaultEmployees
+        setEmployees(loadedEmployees)
       }
     } catch (e) {
       console.error("Config load error:", e)
@@ -164,20 +192,22 @@ export default function Dashboard() {
       if (!data || !data.idToken) {
         throw new Error("Invalid server response: missing identity token")
       }
-      const loggedInUser = { email: data.email, token: data.idToken }
+      const loggedInUser = { email: data.email, token: data.idToken, ...data.user }
       setUser(loggedInUser)
-      localStorage.setItem("adminUser", JSON.stringify(loggedInUser))
     } catch (err) {
       alert("Login failed: " + err.message)
     }
   }
 
-  const handleSave = async () => {
+  const handleSave = async (updatedRulesList?: any[], updatedEmployees?: any[]) => {
     if (!user) return
     try {
       const cleanHost = baseHost.replace(/\/$/, "")
       const isLocal = cleanHost.includes("localhost") || cleanHost.includes("127.0.0.1") || !cleanHost.startsWith("http")
       const configUrl = isLocal ? `${cleanHost}:3000/api/config/settings` : `${cleanHost}/api/config/settings`
+
+      const rulesToSave = updatedRulesList !== undefined ? updatedRulesList : rulesList
+      const employeesToSave = updatedEmployees !== undefined ? updatedEmployees : employees
 
       const res = await fetch(configUrl, {
         method: "POST",
@@ -188,7 +218,9 @@ export default function Dashboard() {
         body: JSON.stringify({
           unsafe_domains: unsafeDomains,
           compliance_rules: complianceRules,
-          denied_entities: deniedEntities
+          denied_entities: deniedEntities,
+          rules_list: rulesToSave,
+          employees: employeesToSave
         })
       })
       
@@ -201,15 +233,467 @@ export default function Dashboard() {
       if (!res.ok) {
         throw new Error((data && data.error) || `Server error: ${res.status} ${res.statusText}`)
       }
-      alert("Settings saved successfully! Please restart the server to update the changes.")
+      
+      if (updatedRulesList !== undefined) setRulesList(updatedRulesList)
+      if (updatedEmployees !== undefined) setEmployees(updatedEmployees)
+      
+      if (data) {
+        await loadData()
+      }
     } catch (err) {
       alert("Save failed: " + err.message)
     }
   }
 
+  const openCreateRule = () => {
+    setRuleId("")
+    setRuleTitle("")
+    setRuleBody("")
+    setRuleAppliedTo("all")
+    setRuleExternalOnly(false)
+    setRuleStatus("active")
+    setView("create-rule")
+  }
+
+  const openEditRule = (rule: any) => {
+    setRuleId(rule.id)
+    setRuleTitle(rule.title)
+    setRuleBody(rule.rule)
+    setRuleAppliedTo(rule.appliedTo || "all")
+    setRuleExternalOnly(rule.externalOnly || false)
+    setRuleStatus(rule.status || "active")
+    setView("edit-rule")
+  }
+
+  const handleSaveRule = async () => {
+    if (!ruleTitle.trim() || !ruleBody.trim()) {
+      alert("Title and Rule description are required.")
+      return
+    }
+
+    let updatedList = [...rulesList]
+    if (ruleId) {
+      updatedList = updatedList.map(r => r.id === ruleId ? {
+        ...r,
+        title: ruleTitle,
+        rule: ruleBody,
+        appliedTo: ruleAppliedTo,
+        externalOnly: ruleExternalOnly,
+        status: ruleStatus
+      } : r)
+    } else {
+      const newRule = {
+        id: Math.random().toString(36).substring(2, 9),
+        title: ruleTitle,
+        rule: ruleBody,
+        appliedTo: ruleAppliedTo,
+        externalOnly: ruleExternalOnly,
+        status: ruleStatus
+      }
+      updatedList.push(newRule)
+    }
+
+    await handleSave(updatedList, employees)
+    setView("dashboard")
+  }
+
+  const handleDeleteRule = async () => {
+    if (!ruleId) return
+    if (!window.confirm("Are you sure you want to delete this rule?")) return
+    const updatedList = rulesList.filter(r => r.id !== ruleId)
+    await handleSave(updatedList, employees)
+    setView("dashboard")
+  }
+
+  const handleAddEmployee = async () => {
+    if (!newEmployeeName.trim() || !newEmployeeEmail.trim() || !newEmployeeRole.trim()) {
+      alert("Name, Email, and Role are required.")
+      return
+    }
+    const newEmp = {
+      name: newEmployeeName.trim(),
+      email: newEmployeeEmail.trim(),
+      role: newEmployeeRole.trim(),
+      isAdmin: false
+    }
+    const updatedEmployees = [...employees, newEmp]
+    await handleSave(rulesList, updatedEmployees)
+    
+    if (Array.isArray(ruleAppliedTo) && !ruleAppliedTo.includes(newEmp.email)) {
+      setRuleAppliedTo([...ruleAppliedTo, newEmp.email])
+    }
+
+    setNewEmployeeName("")
+    setNewEmployeeEmail("")
+    setNewEmployeeRole("")
+    setShowAddEmployeeForm(false)
+  }
+
+  const renderRuleFormView = () => {
+    const isAllSelected = ruleAppliedTo === "all"
+    
+    return (
+      <div className={`theme-${appliedTheme}`} style={{ minHeight: "100vh", backgroundColor: "var(--color-bg-dark)", color: "var(--color-text-dark)", padding: "40px 20px" }}>
+        <div style={{ maxWidth: 800, margin: "0 auto" }}>
+          
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 40 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+              <button 
+                onClick={() => setView("dashboard")}
+                style={{ 
+                  background: "none", 
+                  border: "none", 
+                  color: "var(--color-accent)", 
+                  cursor: "pointer", 
+                  display: "flex", 
+                  alignItems: "center", 
+                  gap: 8,
+                  fontSize: 15,
+                  fontWeight: 600,
+                  padding: 0
+                }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+                Back
+              </button>
+              <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: "var(--color-text-dark)" }}>
+                {ruleId ? "Edit Rule" : "Create New Rule"}
+              </h1>
+            </div>
+            
+            <div style={{ display: "flex", gap: 12 }}>
+              {ruleId && (
+                <button 
+                  onClick={handleDeleteRule} 
+                  className="btn" 
+                  style={{ 
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    backgroundColor: "transparent", 
+                    color: "#d32f2f", 
+                    border: "1px solid #ffcdd2",
+                    padding: "8px 16px",
+                    borderRadius: 6,
+                    fontWeight: 600,
+                    fontSize: 14
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  </svg>
+                  Delete Rule
+                </button>
+              )}
+              <button 
+                onClick={handleSaveRule} 
+                className="btn btn-success" 
+                style={{ 
+                  padding: "8px 24px", 
+                  borderRadius: 6, 
+                  fontWeight: 600, 
+                  fontSize: 14, 
+                  backgroundColor: "#0a58ca", 
+                  color: "#fff", 
+                  border: "none" 
+                }}
+              >
+                Save Rule
+              </button>
+            </div>
+          </div>
+
+          <div className="card" style={{ padding: 32, display: "flex", flexDirection: "column", gap: 28 }}>
+            
+            <div>
+              <label style={{ display: "block", fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+                Title <span style={{ color: "var(--color-danger)" }}>*</span>
+              </label>
+              <input 
+                type="text" 
+                className="input-field" 
+                value={ruleTitle} 
+                onChange={e => setRuleTitle(e.target.value)} 
+                placeholder="Enter rule title"
+                style={{ fontSize: 15, padding: "12px" }}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: "block", fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+                Rule <span style={{ color: "var(--color-danger)" }}>*</span>
+              </label>
+              <textarea 
+                className="input-field" 
+                value={ruleBody} 
+                onChange={e => setRuleBody(e.target.value)} 
+                placeholder="Enter the rule details or conditions"
+                style={{ height: 120, fontSize: 15, padding: "12px", resize: "vertical" }}
+              />
+            </div>
+
+            <div style={{ position: "relative" }}>
+              <label style={{ display: "block", fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+                Applied To <span style={{ color: "var(--color-danger)" }}>*</span>
+              </label>
+              
+              <div 
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "14px 16px",
+                  borderRadius: dropdownOpen ? "8px 8px 0 0" : 8,
+                  border: "1px solid var(--color-border-dark)",
+                  borderBottom: dropdownOpen ? "none" : "1px solid var(--color-border-dark)",
+                  cursor: "pointer",
+                  backgroundColor: appliedTheme === "light" ? "#ffffff" : "#2c2c2e"
+                }}
+              >
+                <span style={{ fontSize: 14, opacity: 0.9 }}>
+                  Select who this rule applies to
+                </span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ transform: dropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}>
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </div>
+
+              {dropdownOpen && (
+                <div style={{
+                  position: "absolute",
+                  top: "100%",
+                  left: 0,
+                  right: 0,
+                  zIndex: 10,
+                  borderRadius: "0 0 8px 8px",
+                  border: "1px solid var(--color-border-dark)",
+                  borderTop: "1px solid rgba(0,0,0,0.05)",
+                  backgroundColor: appliedTheme === "light" ? "#ffffff" : "#1c1c1e",
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
+                  maxHeight: 360,
+                  overflowY: "auto",
+                  padding: "16px 20px"
+                }}>
+                  
+                  <label style={{ 
+                    display: "flex", 
+                    alignItems: "flex-start", 
+                    gap: 12, 
+                    cursor: "pointer",
+                    paddingBottom: 12,
+                    borderBottom: "1px solid var(--color-border-dark)",
+                    marginBottom: 16
+                  }}>
+                    <input 
+                      type="checkbox" 
+                      checked={isAllSelected}
+                      onChange={() => {
+                        if (isAllSelected) {
+                          setRuleAppliedTo([])
+                        } else {
+                          setRuleAppliedTo("all")
+                        }
+                      }}
+                      style={{ marginTop: 4, width: 16, height: 16, accentColor: "#0a58ca" }}
+                    />
+                    <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ opacity: 0.7, marginTop: 2 }}>
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                        <circle cx="9" cy="7" r="4" />
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                      </svg>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 14 }}>All Employees</div>
+                        <div style={{ fontSize: 12, opacity: 0.6, marginTop: 2 }}>Apply this rule to everyone in the organization.</div>
+                      </div>
+                    </div>
+                  </label>
+
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, opacity: 0.8, marginBottom: 4 }}>Separate Employees</div>
+                    <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 12 }}>Apply this rule to specific employees.</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                      {employees.map(emp => {
+                        const isChecked = !isAllSelected && Array.isArray(ruleAppliedTo) && ruleAppliedTo.includes(emp.email)
+                        
+                        return (
+                          <label key={emp.email} style={{ display: "flex", alignItems: "flex-start", gap: 12, cursor: "pointer" }}>
+                            <input 
+                              type="checkbox" 
+                              disabled={isAllSelected}
+                              checked={isChecked}
+                              onChange={() => {
+                                if (isAllSelected) return
+                                const current = Array.isArray(ruleAppliedTo) ? ruleAppliedTo : []
+                                if (current.includes(emp.email)) {
+                                  setRuleAppliedTo(current.filter(email => email !== emp.email))
+                                } else {
+                                  setRuleAppliedTo([...current, emp.email])
+                                }
+                              }}
+                              style={{ width: 16, height: 16, accentColor: "#0a58ca", marginTop: 2 }}
+                            />
+                            <div style={{ display: "flex", gap: 10, alignItems: "flex-start", opacity: isAllSelected ? 0.4 : 1 }}>
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ opacity: 0.7, marginTop: 1 }}>
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="12" cy="7" r="4"></circle>
+                              </svg>
+                              <div>
+                                <div style={{ fontWeight: 600, fontSize: 14 }}>{emp.name}</div>
+                                <div style={{ fontSize: 12, opacity: 0.6 }}>{emp.email}</div>
+                              </div>
+                            </div>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {!showAddEmployeeForm ? (
+                    <button 
+                      onClick={() => setShowAddEmployeeForm(true)}
+                      style={{ 
+                        background: "none", 
+                        border: "none", 
+                        color: "var(--color-accent)", 
+                        cursor: "pointer", 
+                        fontSize: 13, 
+                        fontWeight: 600,
+                        padding: 0
+                      }}
+                    >
+                      + Add another employee
+                    </button>
+                  ) : (
+                    <div style={{ 
+                      marginTop: 12, 
+                      padding: 12, 
+                      border: "1px dashed var(--color-border-dark)", 
+                      borderRadius: 6,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 10 
+                    }}>
+                      <div style={{ fontSize: 12, fontWeight: 600 }}>New Employee Details</div>
+                      <input 
+                        type="text" 
+                        placeholder="Name" 
+                        className="input-field" 
+                        value={newEmployeeName}
+                        onChange={e => setNewEmployeeName(e.target.value)}
+                        style={{ padding: "6px 10px", fontSize: 13 }}
+                      />
+                      <input 
+                        type="email" 
+                        placeholder="Email" 
+                        className="input-field" 
+                        value={newEmployeeEmail}
+                        onChange={e => setNewEmployeeEmail(e.target.value)}
+                        style={{ padding: "6px 10px", fontSize: 13 }}
+                      />
+                      <input 
+                        type="text" 
+                        placeholder="Role (e.g. Sales)" 
+                        className="input-field" 
+                        value={newEmployeeRole}
+                        onChange={e => setNewEmployeeRole(e.target.value)}
+                        style={{ padding: "6px 10px", fontSize: 13 }}
+                      />
+                      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                        <button 
+                          onClick={() => setShowAddEmployeeForm(false)}
+                          className="btn" 
+                          style={{ padding: "4px 8px", fontSize: 12, backgroundColor: "transparent", border: "1px solid var(--color-border-dark)" }}
+                        >
+                          Cancel
+                        </button>
+                        <button 
+                          onClick={handleAddEmployee}
+                          className="btn btn-success" 
+                          style={{ padding: "4px 10px", fontSize: 12 }}
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, display: "flex", alignItems: "center", gap: 6 }}>
+                Trigger only when recipient is external
+                <span 
+                  title="If active, this rule will only be checked when emails are sent to recipient domains different from yours." 
+                  style={{ 
+                    display: "inline-flex", 
+                    alignItems: "center", 
+                    justifyContent: "center", 
+                    width: 16, 
+                    height: 16, 
+                    borderRadius: "50%", 
+                    border: "1px solid currentColor", 
+                    fontSize: 10, 
+                    cursor: "help",
+                    opacity: 0.5
+                  }}
+                >
+                  i
+                </span>
+              </div>
+            </div>
+            <div>
+              <label style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 12, cursor: "pointer" }}>
+                <div style={{ position: "relative", width: 44, height: 24 }}>
+                  <input 
+                    type="checkbox" 
+                    checked={ruleExternalOnly}
+                    onChange={e => setRuleExternalOnly(e.target.checked)}
+                    style={{ opacity: 0, width: 0, height: 0 }}
+                  />
+                  <span style={{
+                    position: "absolute",
+                    top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: ruleExternalOnly ? "#0a58ca" : "#e0e0e0",
+                    transition: "0.3s",
+                    borderRadius: 24
+                  }}>
+                    <span style={{
+                      position: "absolute",
+                      content: "''",
+                      height: 20, width: 20,
+                      left: ruleExternalOnly ? 22 : 2,
+                      bottom: 2,
+                      backgroundColor: "white",
+                      transition: "0.3s",
+                      borderRadius: "50%",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.2)"
+                    }} />
+                  </span>
+                </div>
+                <span style={{ fontSize: 14, fontWeight: 500 }}>
+                  {ruleExternalOnly ? "On" : "Off"}
+                </span>
+              </label>
+            </div>
+
+
+
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const handleLogout = () => {
     setUser(null)
-    localStorage.removeItem("adminUser")
   }
 
   const toggleEntity = (entity: string) => {
@@ -322,6 +806,10 @@ export default function Dashboard() {
     )
   }
 
+  if (view === "create-rule" || view === "edit-rule") {
+    return renderRuleFormView()
+  }
+
   return (
     <div className={`theme-${appliedTheme}`} style={{ minHeight: "100vh", backgroundColor: "var(--color-bg-dark)", color: "var(--color-text-dark)", paddingBottom: 60 }}>
       <div style={{ maxWidth: 1120, margin: "0 auto", padding: "40px 20px" }}>
@@ -336,7 +824,7 @@ export default function Dashboard() {
           <button onClick={handleLogout} className="btn" style={{ backgroundColor: "rgba(255,255,255,0.1)", color: "inherit", border: "1px solid var(--color-border-dark)" }}>Logout</button>
         </div>
 
-        <h1 style={{ marginBottom: 10, fontSize: 34, fontWeight: 800, letterSpacing: "-1px" }}>SafeRail Admin Dashboard</h1>
+        <h1 style={{ marginBottom: 10, fontSize: 34, fontWeight: 800, letterSpacing: "-1px" }}>{user.isAdmin ? "SafeRail Admin Dashboard" : "SafeRail Employee Dashboard"}</h1>
         <br />
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20, marginBottom: 24 }}>
           <div className="card" style={{ padding: 24 }}>
@@ -469,7 +957,8 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="card" style={{ padding: 40 }}>
+        {user.isAdmin && (
+        <div className="card" style={{ padding: 40, marginBottom: 40 }}>
           <h2 style={{ marginBottom: 32, fontSize: 24, fontWeight: 700 }}>Configuration Management</h2>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 32, marginBottom: 40 }}>
@@ -485,15 +974,172 @@ export default function Dashboard() {
               />
             </div>
             <div>
-              <h3 style={{ fontSize: 16, marginBottom: 12, fontWeight: 600 }}>Compliance Rules</h3>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>Compliance Rules</h3>
+                <button 
+                  onClick={openCreateRule} 
+                  className="btn" 
+                  style={{ padding: "6px 12px", fontSize: 13, borderRadius: 6 }}
+                >
+                  + Create Rule
+                </button>
+              </div>
               <p style={{ opacity: 0.6, fontSize: 13, marginBottom: 16 }}>Define the custom rules the AI uses to evaluate your text.</p>
-              <textarea
-                className="input-field"
-                value={complianceRules}
-                onChange={e => setComplianceRules(e.target.value)}
-                style={{ height: 350, resize: "vertical" }}
-                placeholder="1. No financial advice..."
-              />
+              
+              <div style={{ 
+                border: "1px solid var(--color-border-dark)", 
+                borderRadius: 8, 
+                maxHeight: 350,
+                overflowY: "auto",
+                backgroundColor: appliedTheme === "light" ? "#fbfbfc" : "rgba(255,255,255,0.02)" 
+              }}>
+                {rulesList.length === 0 ? (
+                  <div style={{ padding: "40px 20px", textAlign: "center", opacity: 0.5, fontSize: 14 }}>
+                    No rules configured. Click "+ Create Rule" to add one.
+                  </div>
+                ) : (
+                  rulesList.map((r, index) => {
+                    const isAll = r.appliedTo === "all"
+                    let appliedText = "All Employees"
+                    if (!isAll && Array.isArray(r.appliedTo)) {
+                      const names = r.appliedTo.map((email: string) => {
+                        const emp = employees.find(e => e.email === email)
+                        return emp ? emp.name : email
+                      })
+                      if (names.length <= 2) {
+                        appliedText = names.join(", ")
+                      } else {
+                        appliedText = names.slice(0, 2).join(", ") + ` +${names.length - 2}`
+                      }
+                    }
+
+                    return (
+                      <div 
+                        key={r.id || index} 
+                        style={{ 
+                          display: "flex", 
+                          justifyContent: "space-between", 
+                          alignItems: "center", 
+                          padding: "16px 20px", 
+                          borderBottom: index === rulesList.length - 1 ? "none" : "1px solid var(--color-border-dark)",
+                          gap: 16
+                        }}
+                      >
+                        <div style={{ flex: "2", minWidth: 0, fontWeight: 600, fontSize: 14 }}>
+                          {r.title || "Untitled Rule"}
+                        </div>
+
+                        <div style={{ flex: "2", display: "flex", alignItems: "center", gap: 8, fontSize: 13, opacity: 0.8, minWidth: 0 }}>
+                          {isAll ? (
+                            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ opacity: 0.7 }}>
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                <circle cx="9" cy="7" r="4" />
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                              </svg>
+                              All Employees
+                            </span>
+                          ) : (
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, overflow: "hidden" }}>
+                              <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={appliedText}>
+                                {appliedText.split(" +")[0]}
+                              </span>
+                              {appliedText.includes(" +") && (
+                                <span style={{ 
+                                  backgroundColor: "rgba(0,0,0,0.05)", 
+                                  padding: "2px 6px", 
+                                  borderRadius: 12, 
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  flexShrink: 0 
+                                }}>
+                                  +{appliedText.split(" +")[1]}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        <div style={{ flex: "1", display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 500 }}>
+                          <span style={{ 
+                            width: 8, 
+                            height: 8, 
+                            borderRadius: "50%", 
+                            backgroundColor: r.status === "inactive" ? "#ff3b30" : "#34c759",
+                            boxShadow: r.status === "inactive" ? "0 0 0 2px rgba(255,59,48,0.2)" : "0 0 0 2px rgba(52,199,89,0.2)"
+                          }} />
+                          {r.status === "inactive" ? "Inactive" : "Active"}
+                        </div>
+                        
+                        <div style={{ flexShrink: 0 }}>
+                          <button 
+                            onClick={() => openEditRule(r)} 
+                            className="btn" 
+                            style={{ 
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 6,
+                              padding: "6px 16px", 
+                              fontSize: 13,
+                              fontWeight: 600,
+                              borderRadius: 6,
+                              backgroundColor: "transparent",
+                              color: "var(--color-accent)",
+                              border: "1px solid var(--color-border-dark)"
+                            }}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M12 20h9"></path>
+                              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                            </svg>
+                            Edit
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 40 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>Employee Directory</h3>
+            </div>
+            <p style={{ opacity: 0.6, fontSize: 13, marginBottom: 16 }}>List of employees in the database.</p>
+            <div style={{ 
+              border: "1px solid var(--color-border-dark)", 
+              borderRadius: 8, 
+              maxHeight: 350,
+              overflowY: "auto",
+              backgroundColor: appliedTheme === "light" ? "#fbfbfc" : "rgba(255,255,255,0.02)" 
+            }}>
+              {employees.length === 0 ? (
+                <div style={{ padding: "40px 20px", textAlign: "center", opacity: 0.5, fontSize: 14 }}>
+                  No employees found.
+                </div>
+              ) : (
+                employees.map((emp, index) => (
+                  <div key={emp.email} style={{ display: "flex", justifyContent: "space-between", padding: "12px 16px", borderBottom: index === employees.length - 1 ? "none" : "1px solid var(--color-border-dark)" }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>{emp.name}</div>
+                      <div style={{ fontSize: 12, opacity: 0.6 }}>{emp.email}</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {emp.isAdmin && (
+                        <div style={{ fontSize: 12, opacity: 0.8, backgroundColor: "#d32f2f", color: "#fff", padding: "4px 8px", borderRadius: 4, height: "fit-content" }}>
+                          Admin
+                        </div>
+                      )}
+                      <div style={{ fontSize: 12, opacity: 0.8, backgroundColor: "var(--color-accent)", color: "#fff", padding: "4px 8px", borderRadius: 4, height: "fit-content" }}>
+                        {emp.role || "Employee"}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
@@ -527,10 +1173,11 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <button onClick={handleSave} className="btn btn-success" style={{ padding: "16px 32px", fontSize: 15 }}>
+          <button onClick={() => handleSave()} className="btn btn-success" style={{ padding: "16px 32px", fontSize: 15 }}>
             Update Configuration
           </button>
         </div>
+        )}
       </div>
       <style jsx global>{`
         body { margin: 0; }

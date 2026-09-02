@@ -16,7 +16,7 @@ structlog.configure(
 logger = structlog.get_logger()
 
 # Paths
-ROOT_DIR = Path(__file__).parent
+ROOT_DIR = Path(__file__).parent.parent
 SCRIPTS_DIR = ROOT_DIR / "scripts"
 EXTENSION_DIR = ROOT_DIR / "extension"
 BUILD_DIR = ROOT_DIR / "dist_release"

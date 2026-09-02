@@ -193,6 +193,44 @@ const ComplianceWidget = () => {
     return "sender@company.com"
   }
 
+  const getRecipientEmails = (): string[] => {
+    const emails: string[] = []
+    try {
+      // Gmail: Check for elements with attribute 'email'
+      const gmailChips = document.querySelectorAll('span[email], div[email]')
+      gmailChips.forEach(el => {
+        const email = el.getAttribute('email')
+        if (email && email.includes('@')) {
+          emails.push(email.trim().toLowerCase())
+        }
+      })
+      
+      // Gmail fallback: data-hovercard-id is often the email for hovercard
+      const hovercardEls = document.querySelectorAll('[data-hovercard-id]')
+      hovercardEls.forEach(el => {
+        const id = el.getAttribute('data-hovercard-id')
+        if (id && id.includes('@')) {
+          emails.push(id.trim().toLowerCase())
+        }
+      })
+
+      // Outlook: Chips often have data-emailaddress or title containing email
+      const outlookChips = document.querySelectorAll('[data-emailaddress], [title*="@"]')
+      outlookChips.forEach(el => {
+        const email = el.getAttribute('data-emailaddress') || el.getAttribute('title')
+        if (email && email.includes('@') && !email.includes('SignOut') && !email.includes('Account')) {
+          const match = email.match(/<([^>]+)>/) || email.match(/([^<>\s@]+@[^<>\s@]+\.[a-zA-Z]+)/)
+          if (match) {
+            emails.push(match[0].replace(/[<>]/g, '').trim().toLowerCase())
+          }
+        }
+      })
+    } catch (e) {
+      console.error("Error extracting recipient emails:", e)
+    }
+    return [...new Set(emails)]
+  }
+
   // Determine actual theme
   const [systemTheme, setSystemTheme] = useState<"light" | "dark">("light")
 
@@ -373,7 +411,12 @@ const ComplianceWidget = () => {
 
     const response = await sendToBackground({
       name: "check-text",
-      body: { text, platform, senderEmail: getSenderEmail() }
+      body: { 
+        text, 
+        platform, 
+        senderEmail: getSenderEmail(),
+        recipientEmails: getRecipientEmails()
+      }
     })
 
     updateLoading(false)
@@ -609,6 +652,7 @@ const ComplianceWidget = () => {
           body: {
             text,
             senderEmail,
+            recipientEmails: getRecipientEmails(),
             platform: getPlatformContext()
           }
         })

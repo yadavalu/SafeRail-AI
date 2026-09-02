@@ -9,6 +9,7 @@ function IndexPopup() {
   const [baseHost, setBaseHost] = useStorage("baseHost", "https://llm.safeseal.xyz")
   const [localBaseHost, setLocalBaseHost] = useState("")
   const [isFocused, setIsFocused] = useState(false)
+  const [adminUser] = useStorage<any>("adminUser", null)
 
   useEffect(() => {
     if (baseHost !== undefined && !isFocused) {
@@ -279,14 +280,35 @@ function IndexPopup() {
           )}
         </div>
 
-        <div style={{ marginTop: 8 }}>
-          <button
-            className="btn"
-            onClick={() => window.open("tabs/dashboard.html", "_blank")}
-            style={{ width: '100%', padding: '12px', fontSize: 14 }}
-          >
-            Open Admin Dashboard
-          </button>
+        <div style={{ marginTop: 16, borderTop: appliedTheme === 'dark' ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(0,0,0,0.1)', paddingTop: 16 }}>
+          {adminUser ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 32, height: 32, borderRadius: '50%', backgroundColor: 'var(--color-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 'bold' }}>
+                  {adminUser.name ? adminUser.name.charAt(0).toUpperCase() : (adminUser.email ? adminUser.email.charAt(0).toUpperCase() : "U")}
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{adminUser.name || adminUser.email}</div>
+                  <div style={{ fontSize: 11, opacity: 0.6 }}>{adminUser.isAdmin ? "Administrator" : adminUser.role || "Employee"}</div>
+                </div>
+              </div>
+              <button
+                className="btn"
+                onClick={() => window.open("tabs/dashboard.html", "_blank")}
+                style={{ padding: '8px 12px', fontSize: 12, backgroundColor: 'transparent', border: '1px solid var(--color-accent)', color: 'var(--color-accent)' }}
+              >
+                Dashboard
+              </button>
+            </div>
+          ) : (
+            <button
+              className="btn"
+              onClick={() => window.open("tabs/dashboard.html", "_blank")}
+              style={{ width: '100%', padding: '12px', fontSize: 14 }}
+            >
+              Sign In to Dashboard
+            </button>
+          )}
         </div>
       </div>
 
