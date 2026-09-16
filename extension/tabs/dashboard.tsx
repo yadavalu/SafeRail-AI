@@ -36,7 +36,7 @@ type Analytics = {
 
 export default function Dashboard() {
   const [theme] = useStorage("theme", "system")
-  const [baseHost] = useStorage("baseHost", "https://llm.safeseal.xyz")
+  const [baseHost] = useStorage("baseHost", "https://llm.saferail.io")
   const [user, setUser] = useStorage<{ email: string; token: string; isAdmin?: boolean; role?: string; name?: string } | null>("adminUser", null)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")

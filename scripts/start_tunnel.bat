@@ -18,10 +18,10 @@ findstr /C:"<REPLACE_WITH_TUNNEL_ID>" cloudflared.yaml >nul
 if !errorlevel! equ 0 (
     echo [WARNING] Tunnel ID not set in scripts/cloudflared.yaml
     echo [INFO] Attempting to run as a quick tunnel instead...
-    echo [INFO] Note: Quick tunnels use random subdomains and do not support llm.safeseal.xyz
+    echo [INFO] Note: Quick tunnels use random subdomains and do not support llm.saferail.io
     cloudflared tunnel --url http://localhost:3000
 ) else (
-    echo [INFO] Starting named tunnel for llm.safeseal.xyz...
+    echo [INFO] Starting named tunnel for llm.saferail.io...
     cloudflared tunnel --config cloudflared.yaml run
 )
 pause

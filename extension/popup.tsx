@@ -7,7 +7,7 @@ import bannerImg from "data-base64:./assets/banner_transparent.png"
 function IndexPopup() {
   const [theme, setTheme] = useStorage("theme", "system")
   const [modelType, setModelType] = useStorage("modelType", "gemini")
-  const [baseHost, setBaseHost] = useStorage("baseHost", "https://llm.safeseal.xyz")
+  const [baseHost, setBaseHost] = useStorage("baseHost", "https://llm.saferail.io")
   const [localBaseHost, setLocalBaseHost] = useState("")
   const [isFocused, setIsFocused] = useState(false)
   const [adminUser] = useStorage<any>("adminUser", null)
@@ -18,8 +18,8 @@ function IndexPopup() {
     }
   }, [baseHost, isFocused])
 
-  const [ollamaEndpoint, setOllamaEndpoint] = useStorage("ollamaEndpoint", "https://llm.safeseal.xyz/gemini/chat")
-  const [presidioEndpoint, setPresidioEndpoint] = useStorage("presidioEndpoint", "https://llm.safeseal.xyz/analyze")
+  const [ollamaEndpoint, setOllamaEndpoint] = useStorage("ollamaEndpoint", "https://llm.saferail.io/gemini/chat")
+  const [presidioEndpoint, setPresidioEndpoint] = useStorage("presidioEndpoint", "https://llm.saferail.io/analyze")
   const [analysisMode, setAnalysisMode] = useStorage("analysisMode", "onsend")
   const [realTimeAnalysis, setRealTimeAnalysis] = useStorage("realTimeAnalysis", false)
   const [showAdvanced, setShowAdvanced] = useState(false)
@@ -202,16 +202,16 @@ function IndexPopup() {
               className="input-field"
               style={{ flex: '0 0 90px', fontSize: 11, cursor: 'pointer', padding: '10px 4px' }}
               onChange={(e) => handleBaseHostChange(e.target.value)}
-              value={["https://llm.safeseal.xyz", "http://localhost"].includes(localBaseHost || "https://llm.safeseal.xyz") ? (localBaseHost || "https://llm.safeseal.xyz") : "custom"}
+              value={["https://llm.saferail.io", "http://localhost"].includes(localBaseHost || "https://llm.saferail.io") ? (localBaseHost || "https://llm.saferail.io") : "custom"}
             >
-              <option value="https://llm.safeseal.xyz">Cloud</option>
+              <option value="https://llm.saferail.io">Cloud</option>
               <option value="http://localhost">Local</option>
               <option value="custom">Custom</option>
             </select>
              <input
                type="text"
                className="input-field"
-               value={localBaseHost || "https://llm.safeseal.xyz"}
+               value={localBaseHost || "https://llm.saferail.io"}
                onChange={(e) => handleBaseHostChange(e.target.value)}
                onFocus={() => setIsFocused(true)}
                onBlur={() => setIsFocused(false)}
@@ -259,7 +259,7 @@ function IndexPopup() {
                   type="text"
                   className="input-field"
                   style={{ padding: '8px 10px', fontSize: 12 }}
-                  value={ollamaEndpoint || "https://llm.safeseal.xyz/gemini/chat"}
+                  value={ollamaEndpoint || "https://llm.saferail.io/gemini/chat"}
                   onChange={(e) => setOllamaEndpoint(e.target.value)}
                 />
               </div>
@@ -270,7 +270,7 @@ function IndexPopup() {
                   type="text"
                   className="input-field"
                   style={{ padding: '8px 10px', fontSize: 12 }}
-                  value={presidioEndpoint || "https://llm.safeseal.xyz/analyze"}
+                  value={presidioEndpoint || "https://llm.saferail.io/analyze"}
                   onChange={(e) => setPresidioEndpoint(e.target.value)}
                 />
               </div>
