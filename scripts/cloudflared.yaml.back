@@ -8,22 +8,22 @@ dns-resolver-upstream: 1.1.1.1
 
 ingress:
   # Route Gemini API traffic
-  - hostname: dev.safeseal.xyz
+  - hostname: dev.saferail.io
     path: ^/gemini/.*
     service: http://127.0.0.1:3000
 
   # Route SafeRail Backend Auth & Config APIs
-  - hostname: dev.safeseal.xyz
+  - hostname: dev.saferail.io
     path: ^/api/(auth|config|analytics|analyze)/?.*
     service: http://127.0.0.1:3000
 
   # Route Ollama API traffic
-  - hostname: dev.safeseal.xyz
+  - hostname: dev.saferail.io
     path: ^/api/.*
     service: http://127.0.0.1:11434
 
   # Route Presidio / Health check traffic
-  - hostname: dev.safeseal.xyz
+  - hostname: dev.saferail.io
     service: http://127.0.0.1:3000
 
   # Catch-all 404
