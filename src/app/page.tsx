@@ -4,6 +4,7 @@ import Link from "next/link";
 import Brand from "@/components/Brand";
 import Footer from "@/components/Footer";
 import InteractiveDemo from "@/components/InteractiveDemo";
+import DemoRequestForm from "@/components/DemoRequestForm";
 import LanguageToggle from "@/components/LanguageToggle";
 import { useLocale } from "@/components/LocaleProvider";
 import { getCopy } from "@/i18n";
@@ -251,29 +252,7 @@ export default function Home() {
               <h2>{text.contact.headline}</h2>
               <p>{text.contact.description}</p>
             </div>
-            <form className="contact-form reveal">
-              <div className="form-field">
-                <label htmlFor="sr-name">{text.contact.name}</label>
-                <input
-                  id="sr-name"
-                  name="name"
-                  type="text"
-                  autoComplete="name"
-                />
-              </div>
-              <div className="form-field">
-                <label htmlFor="sr-mail">{text.contact.email}</label>
-                <input
-                  id="sr-mail"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                />
-              </div>
-              <button className="cta-ink" type="button">
-                {text.nav.demo}
-              </button>
-            </form>
+            <DemoRequestForm />
           </div>
         </section>
       </main>

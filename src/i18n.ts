@@ -141,6 +141,10 @@ export const copy = {
         "Wir zeigen Ihnen in einer kurzen Demo, wie SafeRail Risiken erkennt, erklärt und löst – in Ihrem E-Mail-Workflow.",
       name: "Name",
       email: "Geschäftliche E-Mail",
+      sending: "Wird gesendet …",
+      success: "Vielen Dank. Ihre Anfrage wurde an SafeRail gesendet.",
+      error:
+        "Ihre Anfrage konnte nicht gesendet werden. Bitte versuchen Sie es später erneut oder kontaktieren Sie kiyan@saferail.io.",
     },
     demo: {
       ariaLabel: "SafeRail E-Mail-Demo",
@@ -407,6 +411,10 @@ export const copy = {
         "In a short demo, we'll show you how SafeRail detects, explains, and resolves risks in your email workflow.",
       name: "Name",
       email: "Business email",
+      sending: "Sending …",
+      success: "Thank you. Your request has been sent to SafeRail.",
+      error:
+        "We couldn't send your request. Please try again later or contact kiyan@saferail.io.",
     },
     demo: {
       ariaLabel: "SafeRail email demo",

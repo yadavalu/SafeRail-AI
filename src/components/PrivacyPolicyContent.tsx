@@ -5,6 +5,7 @@ import Footer from "@/components/Footer";
 import LanguageToggle from "@/components/LanguageToggle";
 import { useLocale } from "@/components/LocaleProvider";
 import { getCopy } from "@/i18n";
+import Link from "next/link";
 
 export default function PrivacyPolicyContent() {
   const { language } = useLocale();
@@ -64,7 +65,7 @@ export default function PrivacyPolicyContent() {
           </section>
         ))}
         <p className="privacy-back">
-          <a href="/">{text.footer.back}</a>
+          <Link href="/">{text.footer.back}</Link>
         </p>
       </main>
 

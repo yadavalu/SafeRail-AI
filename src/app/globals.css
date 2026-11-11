@@ -863,6 +863,32 @@ input:focus-visible {
   font-size: 17px;
 }
 
+.form-honeypot {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.cta-ink:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.form-status {
+  margin: 0;
+  font-size: 15px;
+}
+
+.form-status.success {
+  color: #064b43;
+}
+
+.form-status.error {
+  color: #7a2016;
+}
+
 .site-footer {
   width: min(100%, 1416px);
   margin: 0 auto;
