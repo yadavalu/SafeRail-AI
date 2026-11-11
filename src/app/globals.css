@@ -112,6 +112,33 @@ input:focus-visible {
   text-decoration: none;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.language-toggle {
+  min-width: 62px;
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 10px;
+  border: 1px solid #536474;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--paper);
+  font: 500 12px var(--mono);
+  letter-spacing: 0.06em;
+}
+
+.language-toggle:hover {
+  border-color: var(--teal);
+  color: var(--teal);
+}
+
 .cta {
   display: inline-flex;
   min-height: 44px;
@@ -531,6 +558,14 @@ input:focus-visible {
   text-transform: uppercase;
 }
 
+.supported-by {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 28px;
+  color: var(--muted);
+}
+
 .mark {
   background: linear-gradient(var(--coral), var(--coral)) no-repeat 0 96% / 100% 0.11em;
 }
@@ -867,6 +902,9 @@ input:focus-visible {
   width: min(100% - 40px, 960px);
   margin: 0 auto;
   padding: 24px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   border-bottom: 1px solid var(--line);
 }
 
@@ -940,6 +978,15 @@ input:focus-visible {
 
 .privacy-section p a {
   color: var(--teal);
+}
+
+.privacy-back {
+  margin: 28px 0 0;
+}
+
+.privacy-back a {
+  color: var(--teal);
+  text-decoration: none;
 }
 
 .back-link {

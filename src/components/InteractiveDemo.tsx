@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLocale } from "@/components/LocaleProvider";
+import { getCopy } from "@/i18n";
 
 type DemoStage = "halted" | "fixed" | "sent" | "typing" | "sending";
 
-const message =
-  "Bitte verwende für die Verhandlung ausschließlich die interne Zielmarge von 42 % und gehe nicht unter einen Einkaufsrabatt von 18 %.";
-
 export default function InteractiveDemo() {
+  const { language } = useLocale();
+  const text = getCopy(language).demo;
   const [stage, setStage] = useState<DemoStage>("halted");
   const [typedLength, setTypedLength] = useState(0);
 
@@ -40,8 +41,8 @@ export default function InteractiveDemo() {
     const startTimer = setTimeout(() => {
       interval = setInterval(() => {
         setTypedLength((length) => {
-          const nextLength = Math.min(length + 2, message.length);
-          if (nextLength === message.length) {
+          const nextLength = Math.min(length + 2, text.message.length);
+          if (nextLength === text.message.length) {
             if (interval) clearInterval(interval);
             finishTimer = setTimeout(() => setStage("sending"), 700);
           }
@@ -55,58 +56,51 @@ export default function InteractiveDemo() {
       if (interval) clearInterval(interval);
       if (finishTimer) clearTimeout(finishTimer);
     };
-  }, [stage]);
+  }, [stage, text.message]);
 
   const composing = stage === "typing" || stage === "sending";
 
   return (
-    <div className="demo-card" aria-label="SafeRail E-Mail-Demo">
+    <div className="demo-card" aria-label={text.ariaLabel}>
       <div className="demo-topbar">
-        <span>NEUE NACHRICHT</span>
-        <span className="demo-muted">Re: Konditionen Q3</span>
+        <span>{text.newMessage}</span>
+        <span className="demo-muted">{text.subject}</span>
       </div>
       <div className="demo-row">
-        <span className="mono">An</span>
+        <span className="mono">{text.to}</span>
         <span>sarah@example.com</span>
       </div>
       <div className="demo-row demo-row-cc">
-        <span className="mono">Cc</span>
+        <span className="mono">{text.cc}</span>
         <span>lieferant@example.com</span>
-        <span className="external-badge">extern</span>
+        <span className="external-badge">{text.external}</span>
       </div>
       <div className="demo-body">
-        <p>Hallo Sarah,</p>
+        <p>{text.greeting}</p>
         {composing && (
           <p>
-            {message.slice(0, typedLength)}
+            {text.message.slice(0, typedLength)}
             {stage === "typing" && <span className="caret" aria-hidden="true" />}
           </p>
         )}
         {stage === "halted" && (
           <p>
-            Bitte verwende für die Verhandlung ausschließlich die{" "}
-            <span className="risk-text">
-              interne Zielmarge von 42&nbsp;% und gehe nicht unter einen
-              Einkaufsrabatt von 18&nbsp;%
-            </span>
-            .
+            {text.riskyPrefix}{" "}
+            <span className="risk-text">{text.riskyText}</span>.
           </p>
         )}
         {(stage === "fixed" || stage === "sent") && (
           <p className="pop">
-            <span className="rewrite-text">
-              Die Parameter für die Verhandlung schicke ich dir gleich separat
-              über unseren internen Kanal.
-            </span>
+            <span className="rewrite-text">{text.rewrite}</span>
           </p>
         )}
         {stage !== "typing" && (
           <>
-            <p>Ansonsten sollte alles wie besprochen sein.</p>
+            <p>{text.rest}</p>
             <p>
-              Viele Grüße
+              {text.signoff}
               <br />
-              Daniel
+              {text.sender}
             </p>
           </>
         )}
@@ -128,21 +122,20 @@ export default function InteractiveDemo() {
                 <path d="M10 1.5 18.5 4.5v6c0 5-3.6 8.6-8.5 10-4.9-1.4-8.5-5-8.5-10v-6L10 1.5Z" />
                 <path d="M7.5 8v6M12.5 8v6" />
               </svg>
-              <strong>Versand angehalten</strong>
+              <strong>{text.halted}</strong>
             </div>
-            <span className="severity">Hohes Risiko</span>
+            <span className="severity">{text.severity}</span>
           </div>
           <p className="notice-description">
-            <strong>Grund:</strong> Diese E-Mail enthält vertrauliche interne
-            Verhandlungsparameter. Da ein externer Lieferant in Kopie steht,
-            kann der Versand die kommerzielle Strategie offenlegen.
+            <strong>{language === "de" ? "Grund:" : "Reason:"}</strong>{" "}
+            {text.reason}
           </p>
           <button
             className="demo-action"
             type="button"
             onClick={() => setStage("fixed")}
           >
-            Regelkonforme Formulierung übernehmen
+            {text.apply}
           </button>
         </div>
       )}
@@ -150,15 +143,14 @@ export default function InteractiveDemo() {
       {stage === "fixed" && (
         <div className="demo-notice fixed-notice pop" role="status">
           <span>
-            <strong>Formulierung übernommen.</strong> Die Nachricht ist
-            regelkonform.
+            <strong>{text.fixed}</strong> {text.compliant}
           </span>
           <button
             className="demo-action"
             type="button"
             onClick={() => setStage("sent")}
           >
-            Senden
+            {text.send}
           </button>
         </div>
       )}
@@ -166,22 +158,22 @@ export default function InteractiveDemo() {
       {stage === "sent" && (
         <div className="demo-notice sent-notice pop" role="status">
           <span>
-            <strong style={{ color: "var(--teal)" }}>Gesendet.</strong> Das
-            Risiko hat das Unternehmen nie verlassen.
+            <strong style={{ color: "var(--teal)" }}>{text.sent}</strong>{" "}
+            {text.safe}
           </span>
           <button
             className="demo-action"
             type="button"
             onClick={() => setStage("halted")}
           >
-            Noch einmal
+            {text.again}
           </button>
         </div>
       )}
 
       {stage === "sending" && (
         <p className="status-message" role="status">
-          SafeRail prüft …
+          {text.checking}
         </p>
       )}
     </div>
