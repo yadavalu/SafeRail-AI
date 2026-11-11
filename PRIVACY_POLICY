@@ -1,0 +1,36 @@
+Privacy Policy
+Last Updated: June 2026
+
+SafeRail AI ("we", "our", or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, and safeguard your information when you use the SafeRail AI Chrome Extension and our services.
+
+1
+Information We Collect
+Text Content:
+SafeRail AI processes the text you type into web forms or messages to perform compliance and safety analysis. This processing happens in real-time or upon clicking "Send," depending on your evaluation configuration.
+User Preferences:
+We store your settings, such as your preferred Evaluation Mode, Theme, and API Endpoints, locally on your device using Chrome's storage API.
+2
+How We Use Information
+The text content is used solely to provide safety analysis, identify violations, and offer rewriting suggestions. We do not use your text for marketing, advertising, or any purpose other than providing the core functionality of the SafeRail AI extension.
+
+3
+Data Transmission and Storage
+Transmission:
+Text content is transmitted over secure HTTPS connections to the API endpoints you have configured (e.g., Gemini, Ollama) for the purpose of processing safety analyses.
+Storage:
+We do not store your text content permanently. User preferences are stored locally on your device and are not uploaded to our servers unless specifically required by features you explicitly opt-in to (such as cloud-synced settings).
+4
+Data Security
+We implement industry-standard security measures to protect your data during transmission and ensure that local storage is handled according to Chrome Extension security best practices.
+
+5
+Your Choices
+You can choose between "Real-time" and "On-Send" evaluation modes. You can also disable the extension at any time through the Chrome Extensions manager.
+
+6
+Changes to This Policy
+We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page.
+
+7
+Contact Us
+If you have any questions about this Privacy Policy, please contact us at safety@saferail.ai.

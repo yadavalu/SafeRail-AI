@@ -1,89 +1,189 @@
 "use client";
-import React, { useState, useEffect } from 'react';
-import "../app/globals.css";
 
+import { useEffect, useState } from "react";
 
-const suggestions = {
-  confidential: {
-    trigger: "confidential",
-    message: "Warning: This email may contain confidential information. Are you sure you want to send it to an external address?",
-    severity: "red"
-  },
-  password: {
-    trigger: "password",
-    message: "Security Alert: Sharing passwords via email is insecure. Consider using a secure password manager.",
-    severity: "red"
-  },
-  urgent: {
-    trigger: "urgent",
-    message: "Tone Suggestion: Using 'urgent' can create pressure. Consider rephrasing for a more professional tone.",
-    severity: "yellow"
-  },
-  contract: {
-      trigger: "contract",
-      message: "Compliance Check: This email mentions a contract. Please ensure it has been reviewed by the legal department before sending.",
-      severity: "yellow"
-  }
-};
+type DemoStage = "halted" | "fixed" | "sent" | "typing" | "sending";
 
-const InteractiveDemo = () => {
-  const [emailBody, setEmailBody] = useState('');
-  const [activeSuggestion, setActiveSuggestion] = useState<{ message: string; severity: string; } | null>(null);
+const message =
+  "Bitte verwende für die Verhandlung ausschließlich die interne Zielmarge von 42 % und gehe nicht unter einen Einkaufsrabatt von 18 %.";
+
+export default function InteractiveDemo() {
+  const [stage, setStage] = useState<DemoStage>("halted");
+  const [typedLength, setTypedLength] = useState(0);
 
   useEffect(() => {
-    const lowercasedBody = emailBody.toLowerCase();
-    let foundSuggestion = null;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (stage === "typing") return;
 
-    for (const key in suggestions) {
-        const rule = suggestions[key as keyof typeof suggestions];
-      if (lowercasedBody.includes(rule.trigger)) {
-        foundSuggestion = { message: rule.message, severity: rule.severity };
-      }
+    let timer: ReturnType<typeof setTimeout>;
+    if (stage === "halted") {
+      timer = setTimeout(() => setStage("fixed"), 5200);
+    } else if (stage === "fixed") {
+      timer = setTimeout(() => setStage("sent"), 2800);
+    } else if (stage === "sent") {
+      timer = setTimeout(() => setStage("typing"), 2800);
+    } else {
+      timer = setTimeout(() => setStage("halted"), 900);
     }
-    setActiveSuggestion(foundSuggestion);
 
-  }, [emailBody]);
+    return () => clearTimeout(timer);
+  }, [stage]);
 
-  const getBorderColor = () => {
-    if (!activeSuggestion) return 'border-gray-700';
-    return activeSuggestion.severity === 'red' ? 'border-red-500' : 'border-yellow-500';
-  };
+  useEffect(() => {
+    if (stage !== "typing") {
+      setTypedLength(0);
+      return;
+    }
+
+    let interval: ReturnType<typeof setInterval> | undefined;
+    let finishTimer: ReturnType<typeof setTimeout> | undefined;
+    const startTimer = setTimeout(() => {
+      interval = setInterval(() => {
+        setTypedLength((length) => {
+          const nextLength = Math.min(length + 2, message.length);
+          if (nextLength === message.length) {
+            if (interval) clearInterval(interval);
+            finishTimer = setTimeout(() => setStage("sending"), 700);
+          }
+          return nextLength;
+        });
+      }, 34);
+    }, 500);
+
+    return () => {
+      clearTimeout(startTimer);
+      if (interval) clearInterval(interval);
+      if (finishTimer) clearTimeout(finishTimer);
+    };
+  }, [stage]);
+
+  const composing = stage === "typing" || stage === "sending";
 
   return (
-    <section id="demo" className="py-20 bg-black">
-      <div className="container mx-auto px-6">
-        <div className="text-center mb-12">
-          <h2 className="text-4xl font-extrabold text-white">See Saferail in Action</h2>
-          <p className="mt-2 text-lg text-gray-400">Type keywords like "confidential", "password", "urgent", or "contract".</p>
-        </div>
-        <div className={`bg-gray-900 rounded-2xl border ${getBorderColor()} p-6 max-w-4xl mx-auto transition-all duration-300`}>
-          <div className="flex items-center justify-between pb-4 border-b border-gray-700">
-            <span className="text-gray-400">New Message</span>
-            <button className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Send</button>
-          </div>
-          <div className="py-2">
-            <input type="text" placeholder="To: external.contact@example.com" className="w-full bg-transparent text-gray-300 p-2 focus:outline-none" />
-          </div>
-          <div className="py-2 border-t border-b border-gray-700">
-            <input type="text" placeholder="Subject: Project Details" className="w-full bg-transparent text-gray-300 p-2 focus:outline-none" />
-          </div>
-          <textarea
-            value={emailBody}
-            onChange={(e) => setEmailBody(e.target.value)}
-            placeholder="Compose your email..."
-            className="w-full h-48 bg-transparent text-gray-200 p-4 focus:outline-none resize-none"
-          ></textarea>
-          {activeSuggestion && (
-            <div className={`p-4 rounded-lg mt-4 ${activeSuggestion.severity === 'red' ? 'bg-red-900/[0.4]' : 'bg-yellow-900/[0.4]'}`}>
-              <p className={`font-semibold ${activeSuggestion.severity === 'red' ? 'text-red-400' : 'text-yellow-400'}`}>
-                {activeSuggestion.message}
-              </p>
-            </div>
-          )}
-        </div>
+    <div className="demo-card" aria-label="SafeRail E-Mail-Demo">
+      <div className="demo-topbar">
+        <span>NEUE NACHRICHT</span>
+        <span className="demo-muted">Re: Konditionen Q3</span>
       </div>
-    </section>
-  );
-};
+      <div className="demo-row">
+        <span className="mono">An</span>
+        <span>sarah@example.com</span>
+      </div>
+      <div className="demo-row demo-row-cc">
+        <span className="mono">Cc</span>
+        <span>lieferant@example.com</span>
+        <span className="external-badge">extern</span>
+      </div>
+      <div className="demo-body">
+        <p>Hallo Sarah,</p>
+        {composing && (
+          <p>
+            {message.slice(0, typedLength)}
+            {stage === "typing" && <span className="caret" aria-hidden="true" />}
+          </p>
+        )}
+        {stage === "halted" && (
+          <p>
+            Bitte verwende für die Verhandlung ausschließlich die{" "}
+            <span className="risk-text">
+              interne Zielmarge von 42&nbsp;% und gehe nicht unter einen
+              Einkaufsrabatt von 18&nbsp;%
+            </span>
+            .
+          </p>
+        )}
+        {(stage === "fixed" || stage === "sent") && (
+          <p className="pop">
+            <span className="rewrite-text">
+              Die Parameter für die Verhandlung schicke ich dir gleich separat
+              über unseren internen Kanal.
+            </span>
+          </p>
+        )}
+        {stage !== "typing" && (
+          <>
+            <p>Ansonsten sollte alles wie besprochen sein.</p>
+            <p>
+              Viele Grüße
+              <br />
+              Daniel
+            </p>
+          </>
+        )}
+      </div>
 
-export default InteractiveDemo;
+      {stage === "halted" && (
+        <div className="demo-notice pop" role="status">
+          <div className="notice-heading">
+            <div className="notice-title">
+              <svg
+                aria-hidden="true"
+                width="20"
+                height="22"
+                viewBox="0 0 20 22"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M10 1.5 18.5 4.5v6c0 5-3.6 8.6-8.5 10-4.9-1.4-8.5-5-8.5-10v-6L10 1.5Z" />
+                <path d="M7.5 8v6M12.5 8v6" />
+              </svg>
+              <strong>Versand angehalten</strong>
+            </div>
+            <span className="severity">Hohes Risiko</span>
+          </div>
+          <p className="notice-description">
+            <strong>Grund:</strong> Diese E-Mail enthält vertrauliche interne
+            Verhandlungsparameter. Da ein externer Lieferant in Kopie steht,
+            kann der Versand die kommerzielle Strategie offenlegen.
+          </p>
+          <button
+            className="demo-action"
+            type="button"
+            onClick={() => setStage("fixed")}
+          >
+            Regelkonforme Formulierung übernehmen
+          </button>
+        </div>
+      )}
+
+      {stage === "fixed" && (
+        <div className="demo-notice fixed-notice pop" role="status">
+          <span>
+            <strong>Formulierung übernommen.</strong> Die Nachricht ist
+            regelkonform.
+          </span>
+          <button
+            className="demo-action"
+            type="button"
+            onClick={() => setStage("sent")}
+          >
+            Senden
+          </button>
+        </div>
+      )}
+
+      {stage === "sent" && (
+        <div className="demo-notice sent-notice pop" role="status">
+          <span>
+            <strong style={{ color: "var(--teal)" }}>Gesendet.</strong> Das
+            Risiko hat das Unternehmen nie verlassen.
+          </span>
+          <button
+            className="demo-action"
+            type="button"
+            onClick={() => setStage("halted")}
+          >
+            Noch einmal
+          </button>
+        </div>
+      )}
+
+      {stage === "sending" && (
+        <p className="status-message" role="status">
+          SafeRail prüft …
+        </p>
+      )}
+    </div>
+  );
+}
