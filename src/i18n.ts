@@ -19,7 +19,7 @@ export const copy = {
     hero: {
       title: "Compliance, bevor eine E-Mail zum",
       highlight: "Risiko",
-      end: "wird.",
+      end: " wird.",
       description:
         "SafeRail prüft ausgehende E-Mails in Echtzeit, erklärt das Risiko im Kontext und schlägt eine regelkonforme Formulierung vor. In der Sekunde, in der es noch etwas nützt: vor dem Senden.",
       infrastructure: "Läuft lokal auf Ihrer Infrastruktur",
